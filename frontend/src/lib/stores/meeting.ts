@@ -3,10 +3,15 @@
  */
 import { writable } from 'svelte/store';
 
+export interface MeetingType {
+	id: number;
+	name: string;
+}
+
 export interface Meeting {
 	id: number;
-	type_id: number;
-	type_name?: string;
+	type_id: number | null;
+	meeting_type?: MeetingType | null;
 	title: string;
 	scheduled_at: string | null;
 	location: string | null;
@@ -43,14 +48,20 @@ export interface AgendaQuestion {
 	answered: boolean;
 }
 
+export interface ContactBrief {
+	id: number;
+	name: string;
+	organization: string | null;
+	role: string | null;
+}
+
 export interface Attendee {
 	id: number;
-	contact_id: number;
-	name: string;
-	role: string | null;
-	organization: string | null;
-	attended: boolean;
+	meeting_id: number;
+	contact_id: number | null;
+	attended: boolean | null;
 	speaker_label: string | null;
+	contact: ContactBrief | null;
 }
 
 export const meetings = writable<Meeting[]>([]);

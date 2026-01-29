@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { getDeletedMeetings, restoreMeeting } from '$lib/api/meetings';
 	import type { Meeting } from '$lib/stores/meeting';
+	import { ArrowLeft } from 'lucide-svelte';
 
 	let meetings: Meeting[] = [];
 	let isLoading = false;
@@ -87,7 +88,10 @@
 <div class="space-y-6">
 	<div class="flex justify-between items-center">
 		<h1 class="text-2xl font-bold text-gray-900">삭제된 회의</h1>
-		<a href="/meetings" class="btn btn-secondary"> ← 회의 목록으로 </a>
+		<a href="/meetings" class="btn btn-secondary">
+			<ArrowLeft class="w-4 h-4 inline mr-1" />
+			회의 목록으로
+		</a>
 	</div>
 
 	<!-- Deleted Meetings List -->
@@ -151,8 +155,8 @@
 								<div class="text-sm font-medium text-gray-900">
 									{meeting.title}
 								</div>
-								{#if meeting.type_name}
-									<p class="text-xs text-gray-500">{meeting.type_name}</p>
+								{#if meeting.meeting_type?.name}
+									<p class="text-xs text-gray-500">{meeting.meeting_type.name}</p>
 								{/if}
 							</td>
 							<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

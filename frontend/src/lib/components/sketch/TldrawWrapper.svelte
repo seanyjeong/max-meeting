@@ -5,6 +5,7 @@
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
+	import { Pencil, Eraser, Undo2, Trash2 } from 'lucide-svelte';
 
 	interface Props {
 		height?: string;
@@ -272,7 +273,7 @@
 				onclick={() => (tool = 'pen')}
 				title="펜"
 			>
-				✏️
+				<Pencil class="w-5 h-5" />
 			</button>
 			<button
 				type="button"
@@ -280,7 +281,7 @@
 				onclick={() => (tool = 'eraser')}
 				title="지우개"
 			>
-				🧹
+				<Eraser class="w-5 h-5" />
 			</button>
 		</div>
 
@@ -311,10 +312,10 @@
 		<!-- 작업 버튼 -->
 		<div class="action-group">
 			<button type="button" class="action-btn" onclick={undo} title="실행 취소">
-				↩️
+				<Undo2 class="w-5 h-5" />
 			</button>
 			<button type="button" class="action-btn" onclick={clearAll} title="전체 지우기">
-				🗑️
+				<Trash2 class="w-5 h-5" />
 			</button>
 		</div>
 	</div>

@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
 	import AgendaEditor, { type AgendaItem } from '$lib/components/AgendaEditor.svelte';
+	import { Sparkles, ArrowLeft } from 'lucide-svelte';
 
 	interface MeetingType {
 		id: number;
@@ -775,7 +776,8 @@
 							onclick={() => { showAgendaEditor = false; }}
 							class="btn btn-secondary text-sm"
 						>
-							← 텍스트 입력으로 돌아가기
+							<ArrowLeft class="w-4 h-4 inline mr-1" />
+							텍스트 입력으로 돌아가기
 						</button>
 					</div>
 					<AgendaEditor
@@ -862,7 +864,8 @@
 													{#if generatingQuestionsFor === agenda.id}
 														생성 중...
 													{:else}
-														🤖 AI 질문 생성
+														<Sparkles class="w-4 h-4 inline mr-1" />
+														AI 질문 생성
 													{/if}
 												</button>
 											</div>
@@ -882,10 +885,11 @@
 														/>
 														{#if question.is_generated}
 															<span
-																class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded whitespace-nowrap"
+																class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded whitespace-nowrap flex items-center gap-1"
 																title="AI 생성"
 															>
-																🤖 AI
+																<Sparkles class="w-3 h-3" />
+																AI
 															</span>
 														{/if}
 														<button

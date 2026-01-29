@@ -8,6 +8,8 @@
 </script>
 
 <script lang="ts">
+	import { Undo2, Plus, Lightbulb, ClipboardList, ChevronRight, ChevronUp, ChevronDown, ArrowLeft, ArrowRight, FolderClosed, Trash2 } from 'lucide-svelte';
+
 	interface Props {
 		items: AgendaItem[];
 		onItemsChange: (items: AgendaItem[]) => void;
@@ -231,7 +233,8 @@
 			class="px-3 py-2 bg-white border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all"
 			title="되돌리기 (Ctrl+Z)"
 		>
-			↩️ 되돌리기
+			<Undo2 class="w-4 h-4 inline mr-1" />
+			되돌리기
 		</button>
 
 		<button
@@ -240,11 +243,13 @@
 			{disabled}
 			class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-all"
 		>
-			➕ 안건 추가
+			<Plus class="w-4 h-4 inline mr-1" />
+			안건 추가
 		</button>
 
-		<div class="ml-auto text-sm text-slate-500">
-			💡 하위 항목은 각 안건의 "➕하위" 버튼으로 추가
+		<div class="ml-auto text-sm text-slate-500 flex items-center gap-1">
+			<Lightbulb class="w-4 h-4" />
+			하위 항목은 각 안건의 "+하위" 버튼으로 추가
 		</div>
 	</div>
 
@@ -252,7 +257,7 @@
 	<div class="bg-white border-2 border-t-0 border-slate-200 rounded-b-xl p-4 min-h-[300px]">
 		{#if internalItems.length === 0}
 			<div class="flex flex-col items-center justify-center py-16 text-slate-400">
-				<div class="text-5xl mb-4">📋</div>
+				<ClipboardList class="w-12 h-12 mb-4" />
 				<p class="text-lg font-medium">안건이 없습니다</p>
 				<p class="text-sm mt-2">위의 "안건 추가" 버튼을 눌러 시작하세요</p>
 			</div>
@@ -283,13 +288,11 @@
 						class="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded transition-all"
 						title={collapsedItems.has(item.id) ? '펼치기' : '접기'}
 					>
-						<span
-							class="transform transition-transform {collapsedItems.has(item.id)
+						<ChevronRight
+							class="w-4 h-4 transform transition-transform {collapsedItems.has(item.id)
 								? 'rotate-0'
 								: 'rotate-90'}"
-						>
-							▶
-						</span>
+						/>
 					</button>
 				{:else}
 					<div class="w-6 h-6 flex items-center justify-center text-slate-300">
@@ -326,7 +329,7 @@
 						class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded disabled:opacity-30 transition-all"
 						title="위로 이동"
 					>
-						⬆️
+						<ChevronUp class="w-4 h-4" />
 					</button>
 
 					<!-- Move Down -->
@@ -337,7 +340,7 @@
 						class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded disabled:opacity-30 transition-all"
 						title="아래로 이동"
 					>
-						⬇️
+						<ChevronDown class="w-4 h-4" />
 					</button>
 
 					<!-- Promote (move to parent level) -->
@@ -349,7 +352,7 @@
 							class="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
 							title="상위 레벨로 이동"
 						>
-							⬅️
+							<ArrowLeft class="w-4 h-4" />
 						</button>
 					{/if}
 
@@ -362,7 +365,7 @@
 							class="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
 							title="이전 항목의 하위로 이동"
 						>
-							➡️
+							<ArrowRight class="w-4 h-4" />
 						</button>
 					{/if}
 
@@ -374,7 +377,7 @@
 						class="px-2 py-1 text-xs font-semibold text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-all"
 						title="하위 항목 추가"
 					>
-						➕하위
+						<Plus class="w-3 h-3 inline mr-0.5" />하위
 					</button>
 
 					<!-- Delete -->
@@ -385,7 +388,7 @@
 						class="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
 						title="삭제"
 					>
-						🗑️
+						<Trash2 class="w-4 h-4" />
 					</button>
 				</div>
 			</div>
@@ -414,8 +417,9 @@
 
 		<!-- Collapsed indicator -->
 		{#if children.length > 0 && collapsedItems.has(item.id)}
-			<div class="ml-8 mb-2 text-sm text-slate-400 italic">
-				📁 {children.length}개 하위 항목 (클릭하여 펼치기)
+			<div class="ml-8 mb-2 text-sm text-slate-400 italic flex items-center gap-1">
+				<FolderClosed class="w-4 h-4" />
+				{children.length}개 하위 항목 (클릭하여 펼치기)
 			</div>
 		{/if}
 	</div>
