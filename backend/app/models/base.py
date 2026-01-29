@@ -1,6 +1,6 @@
 """Base model classes and mixins for SQLAlchemy models."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -43,6 +43,14 @@ class SoftDeleteMixin:
     def is_deleted(self) -> bool:
         """Check if the record is soft deleted."""
         return self.deleted_at is not None
+
+    def soft_delete(self) -> None:
+        """Mark record as deleted."""
+        self.deleted_at = datetime.now(timezone.utc)
+
+    def restore(self) -> None:
+        """Restore a soft-deleted record."""
+        self.deleted_at = None
 
 
 class CreatedAtMixin:
