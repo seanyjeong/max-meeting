@@ -2,6 +2,9 @@
  * Auth Store - Authentication state management
  */
 import { writable } from 'svelte/store';
+import { PUBLIC_API_URL } from '$env/static/public';
+
+const API_BASE = PUBLIC_API_URL || '/api/v1';
 
 interface AuthState {
 	isAuthenticated: boolean;
@@ -56,7 +59,7 @@ export async function refreshToken(): Promise<boolean> {
 	}
 
 	try {
-		const response = await fetch('/api/v1/auth/refresh', {
+		const response = await fetch(`${API_BASE}/auth/refresh`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',

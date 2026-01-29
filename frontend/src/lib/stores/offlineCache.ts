@@ -3,10 +3,13 @@
  * 회의 전에 안건/질문지를 사전 다운로드하여 오프라인에서도 사용 가능하도록 함
  */
 import { browser } from '$app/environment';
+import { PUBLIC_API_URL } from '$env/static/public';
 import type { MeetingDetail, Agenda } from './meeting';
 import type { Contact } from './contacts';
 import { get } from 'svelte/store';
 import { auth } from './auth';
+
+const API_BASE = PUBLIC_API_URL || '/api/v1';
 
 const DB_NAME = 'max-meeting-cache';
 const DB_VERSION = 1;
@@ -143,7 +146,7 @@ export async function prefetchMeetingData(meetingId: number): Promise<void> {
 		}
 
 		// 회의 상세 조회
-		const meetingRes = await fetch(`/api/v1/meetings/${meetingId}`, { headers });
+		const meetingRes = await fetch(`${API_BASE}/meetings/${meetingId}`, { headers });
 
 		if (meetingRes.ok) {
 			const meeting = await meetingRes.json();
@@ -177,7 +180,7 @@ export async function cacheContacts(): Promise<void> {
 			headers['Authorization'] = `Bearer ${authState.accessToken}`;
 		}
 
-		const res = await fetch('/api/v1/contacts?limit=100', { headers });
+		const res = await fetch(`${API_BASE}/contacts?limit=100`, { headers });
 
 		if (res.ok) {
 			const contactsData = await res.json();

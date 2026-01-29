@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
+	import { PUBLIC_API_URL } from '$env/static/public';
+
+	const API_BASE = PUBLIC_API_URL || '/api/v1';
 
 	let password = '';
 	let error = '';
@@ -11,7 +14,7 @@
 		isLoading = true;
 
 		try {
-			const response = await fetch('/api/v1/auth/login', {
+			const response = await fetch(`${API_BASE}/auth/login`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'

@@ -16,6 +16,9 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth';
+	import { PUBLIC_API_URL } from '$env/static/public';
+
+	const API_BASE = PUBLIC_API_URL || '/api/v1';
 
 	interface SearchResult {
 		meetings?: Array<{
@@ -144,7 +147,7 @@
 		loading = true;
 		try {
 			const token = $auth.accessToken;
-			const response = await fetch(`/api/v1/search?q=${encodeURIComponent(query)}&limit=10`, {
+			const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}&limit=10`, {
 				headers: {
 					Authorization: `Bearer ${token}`
 				}

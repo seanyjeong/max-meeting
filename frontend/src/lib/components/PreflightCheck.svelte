@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createEventDispatcher } from 'svelte';
+	import { PUBLIC_API_URL } from '$env/static/public';
+
+	const API_BASE = PUBLIC_API_URL || '/api/v1';
 
 	export let meetingId: number;
 	export let onComplete: (() => void) | undefined = undefined;
@@ -36,15 +39,15 @@
 		// Check agendas cached
 		updateCheck('agendas', { status: 'checking', message: '안건 캐싱 확인 중...' });
 		try {
-			const agendaCache = await caches.match(`/api/v1/meetings/${meetingId}/agendas`);
+			const agendaCache = await caches.match(`${API_BASE}/meetings/${meetingId}/agendas`);
 			if (agendaCache) {
 				updateCheck('agendas', { status: 'success', message: '안건 캐싱 완료' });
 			} else {
 				// Try to fetch and cache
-				const response = await fetch(`/api/v1/meetings/${meetingId}/agendas`);
+				const response = await fetch(`${API_BASE}/meetings/${meetingId}/agendas`);
 				if (response.ok) {
 					const cache = await caches.open('api-cache');
-					await cache.put(`/api/v1/meetings/${meetingId}/agendas`, response);
+					await cache.put(`${API_BASE}/meetings/${meetingId}/agendas`, response);
 					updateCheck('agendas', { status: 'success', message: '안건 캐싱 완료' });
 				} else {
 					updateCheck('agendas', {
@@ -60,7 +63,7 @@
 		// Check contacts
 		updateCheck('contacts', { status: 'checking', message: '연락처 동기화 확인 중...' });
 		try {
-			const contactCache = await caches.match('/api/v1/contacts');
+			const contactCache = await caches.match(`${API_BASE}/contacts`);
 			if (contactCache) {
 				updateCheck('contacts', { status: 'success', message: '연락처 동기화 완료' });
 			} else {
