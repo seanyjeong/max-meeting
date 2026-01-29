@@ -176,18 +176,28 @@
 
 		try {
 			// Use backend AI parsing API for intelligent hierarchical structure detection
-			const response = await api.post<{ items: Array<{ title: string; description?: string }> }>(
+			interface ParsedItem {
+				title: string;
+				description?: string | null;
+				children?: ParsedItem[];
+			}
+			const response = await api.post<{ items: ParsedItem[] }>(
 				'/agendas/parse-preview',
 				{ text: agendaTextInput }
 			);
 
-			const parsedAgendas: AgendaInput[] = (response.items || []).map((item) => ({
-				id: crypto.randomUUID(),
-				title: item.title,
-				description: item.description || '',
-				questions: [],
-				children: []
-			}));
+			// Recursively convert parsed items with children
+			function convertItem(item: ParsedItem): AgendaInput {
+				return {
+					id: crypto.randomUUID(),
+					title: item.title,
+					description: item.description || '',
+					questions: [],
+					children: (item.children || []).map(convertItem)
+				};
+			}
+
+			const parsedAgendas: AgendaInput[] = (response.items || []).map(convertItem);
 
 			if (parsedAgendas.length > 0) {
 				// Replace existing agendas with parsed ones
