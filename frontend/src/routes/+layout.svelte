@@ -3,6 +3,7 @@
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
 	import QuickJump from '$lib/components/QuickJump.svelte';
 	import SkipLink from '$lib/components/SkipLink.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -10,11 +11,16 @@
 	// Public routes that don't require authentication
 	const publicRoutes = ['/login'];
 
+	let isRedirecting = false;
+
 	$: isPublicRoute = publicRoutes.includes($page.url.pathname);
 
 	// Redirect to login if not authenticated and not on public route
-	$: if (!$auth.isAuthenticated && !isPublicRoute && typeof window !== 'undefined') {
-		goto('/login');
+	$: if (browser && !$auth.isAuthenticated && !isPublicRoute && !isRedirecting) {
+		isRedirecting = true;
+		goto('/login').finally(() => {
+			isRedirecting = false;
+		});
 	}
 </script>
 
