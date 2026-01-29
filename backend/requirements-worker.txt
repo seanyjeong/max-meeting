@@ -1,0 +1,9 @@
+# Base requirements
+-r requirements-base.txt
+
+# STT (CPU-only PyTorch)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchaudio
+faster-whisper>=1.0.0
+pyannote.audio==3.1.1

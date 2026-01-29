@@ -137,6 +137,28 @@
 					</div>
 				{/if}
 
+				<!-- Children (Sub-topics) -->
+				{#if currentAgenda.children && currentAgenda.children.length > 0}
+					<div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
+						<h3 class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">
+							하위 토픽
+						</h3>
+						<ul class="space-y-2">
+							{#each currentAgenda.children as child (child.id)}
+								<li class="flex items-start gap-2">
+									<span class="text-blue-400 mt-0.5">•</span>
+									<div>
+										<span class="text-sm font-medium text-gray-800">{child.title}</span>
+										{#if child.description}
+											<p class="text-xs text-gray-600 mt-0.5">{child.description}</p>
+										{/if}
+									</div>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+
 				<!-- Questions Checklist -->
 				{#if totalQuestions > 0}
 					<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">

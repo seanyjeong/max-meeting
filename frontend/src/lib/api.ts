@@ -204,6 +204,7 @@ class ApiClient {
 		totalSize: number
 	): Promise<UploadProgressResponse> {
 		const headers: Record<string, string> = {
+			'Content-Type': chunk.type || 'audio/webm',
 			'Upload-Offset': String(offset),
 			'Content-Length': String(chunk.size),
 			'Upload-Length': String(totalSize)
@@ -214,6 +215,14 @@ class ApiClient {
 			headers['Authorization'] = `Bearer ${token}`;
 		}
 
+		console.log('[API] uploadChunk 시작:', {
+			recordingId,
+			offset,
+			chunkSize: chunk.size,
+			totalSize,
+			mimeType: chunk.type
+		});
+
 		const response = await fetch(`${API_BASE}/recordings/${recordingId}/upload`, {
 			method: 'POST',
 			headers,
@@ -221,7 +230,16 @@ class ApiClient {
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			let error;
+			try {
+				error = await response.json();
+			} catch {
+				error = { error: { message: `HTTP ${response.status}` } };
+			}
+			console.error('[API] uploadChunk 실패:', {
+				status: response.status,
+				error
+			});
 			throw new ApiError(
 				error.error?.code || 'UPLOAD_ERROR',
 				error.error?.message || 'Upload failed',
@@ -229,7 +247,9 @@ class ApiClient {
 			);
 		}
 
-		return response.json();
+		const result = await response.json();
+		console.log('[API] uploadChunk 완료:', result);
+		return result;
 	}
 }
 

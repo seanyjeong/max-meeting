@@ -9,6 +9,7 @@ from app.models.enums import AgendaStatus
 from app.schemas.agenda import (
     AgendaCreate,
     AgendaUpdate,
+    AgendaMoveRequest,
     QuestionCreate,
     QuestionUpdate,
     ReorderItem,
@@ -55,14 +56,17 @@ class AgendaService:
         meeting_id: int,
         include_deleted: bool = False,
     ) -> list[Agenda]:
-        """List all agendas for a meeting."""
+        """List all agendas for a meeting as a flat list."""
         await self.get_meeting_or_raise(meeting_id)
 
         query = (
             select(Agenda)
-            .options(selectinload(Agenda.questions))
+            .options(
+                selectinload(Agenda.questions),
+                selectinload(Agenda.children),
+            )
             .where(Agenda.meeting_id == meeting_id)
-            .order_by(Agenda.order_num)
+            .order_by(Agenda.level, Agenda.order_num)
         )
 
         if not include_deleted:
@@ -71,28 +75,82 @@ class AgendaService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_next_order_num(self, meeting_id: int) -> int:
-        """Get the next order number for an agenda."""
-        result = await self.db.execute(
-            select(func.coalesce(func.max(Agenda.order_num), -1) + 1).where(
-                Agenda.meeting_id == meeting_id,
-                Agenda.deleted_at.is_(None),
+    async def list_agendas_tree(
+        self,
+        meeting_id: int,
+        include_deleted: bool = False,
+    ) -> list[Agenda]:
+        """List all agendas for a meeting as a tree (root level only with children loaded)."""
+        await self.get_meeting_or_raise(meeting_id)
+
+        # Get all agendas first
+        query = (
+            select(Agenda)
+            .options(
+                selectinload(Agenda.questions),
+                selectinload(Agenda.children).selectinload(Agenda.questions),
             )
+            .where(
+                Agenda.meeting_id == meeting_id,
+                Agenda.parent_id.is_(None),  # Only root level
+            )
+            .order_by(Agenda.order_num)
         )
+
+        if not include_deleted:
+            query = query.where(Agenda.deleted_at.is_(None))
+
+        result = await self.db.execute(query)
+        root_agendas = list(result.scalars().all())
+
+        # Recursively load children (SQLAlchemy should have loaded them via selectinload)
+        return root_agendas
+
+    async def get_next_order_num(
+        self, meeting_id: int, parent_id: int | None = None
+    ) -> int:
+        """Get the next order number for an agenda within a parent."""
+        query = select(func.coalesce(func.max(Agenda.order_num), -1) + 1).where(
+            Agenda.meeting_id == meeting_id,
+            Agenda.deleted_at.is_(None),
+        )
+        if parent_id is None:
+            query = query.where(Agenda.parent_id.is_(None))
+        else:
+            query = query.where(Agenda.parent_id == parent_id)
+
+        result = await self.db.execute(query)
         return result.scalar() or 0
+
+    async def get_parent_level(self, parent_id: int | None) -> int:
+        """Get the level of a parent agenda (returns 0 if parent is None)."""
+        if parent_id is None:
+            return 0
+        parent = await self.get_agenda_or_raise(parent_id)
+        return parent.level + 1
 
     async def create_agenda(
         self,
         meeting_id: int,
         data: AgendaCreate,
     ) -> Agenda:
-        """Create a new agenda."""
+        """Create a new agenda with optional parent."""
         await self.get_meeting_or_raise(meeting_id)
 
-        order_num = await self.get_next_order_num(meeting_id)
+        # Validate parent exists and belongs to the same meeting
+        parent_id = data.parent_id
+        if parent_id is not None:
+            parent = await self.get_agenda_or_raise(parent_id)
+            if parent.meeting_id != meeting_id:
+                raise ValueError("Parent agenda must belong to the same meeting")
+
+        order_num = await self.get_next_order_num(meeting_id, parent_id)
+        level = await self.get_parent_level(parent_id)
 
         agenda = Agenda(
             meeting_id=meeting_id,
+            parent_id=parent_id,
+            level=level,
             title=data.title,
             description=data.description,
             order_num=order_num,
@@ -139,7 +197,7 @@ class AgendaService:
         meeting_id: int,
         items: list[ReorderItem],
     ) -> int:
-        """Reorder agendas for a meeting."""
+        """Reorder agendas for a meeting (within the same parent level)."""
         await self.get_meeting_or_raise(meeting_id)
 
         updated_count = 0
@@ -156,6 +214,71 @@ class AgendaService:
             updated_count += result.rowcount
 
         return updated_count
+
+    async def move_agenda(
+        self,
+        agenda_id: int,
+        data: AgendaMoveRequest,
+    ) -> Agenda:
+        """Move an agenda to a new parent and/or position."""
+        agenda = await self.get_agenda_or_raise(agenda_id)
+        new_parent_id = data.new_parent_id
+
+        # Validate new parent
+        if new_parent_id is not None:
+            new_parent = await self.get_agenda_or_raise(new_parent_id)
+            # Prevent moving to own descendant (would create cycle)
+            if await self._is_descendant(new_parent_id, agenda_id):
+                raise ValueError("Cannot move agenda to its own descendant")
+            # Ensure same meeting
+            if new_parent.meeting_id != agenda.meeting_id:
+                raise ValueError("Cannot move agenda to a different meeting")
+
+        # Calculate new level
+        new_level = await self.get_parent_level(new_parent_id)
+
+        # Update level for all descendants recursively
+        level_diff = new_level - agenda.level
+        if level_diff != 0:
+            await self._update_descendant_levels(agenda_id, level_diff)
+
+        # Update the agenda itself
+        agenda.parent_id = new_parent_id
+        agenda.level = new_level
+        agenda.order_num = data.new_order_num
+
+        await self.db.flush()
+        await self.db.refresh(agenda)
+
+        return agenda
+
+    async def _is_descendant(self, potential_descendant_id: int, ancestor_id: int) -> bool:
+        """Check if potential_descendant is a descendant of ancestor."""
+        # Get all descendants of ancestor
+        result = await self.db.execute(
+            select(Agenda.id).where(Agenda.parent_id == ancestor_id)
+        )
+        child_ids = list(result.scalars().all())
+
+        if potential_descendant_id in child_ids:
+            return True
+
+        for child_id in child_ids:
+            if await self._is_descendant(potential_descendant_id, child_id):
+                return True
+
+        return False
+
+    async def _update_descendant_levels(self, parent_id: int, level_diff: int) -> None:
+        """Recursively update levels of all descendants."""
+        result = await self.db.execute(
+            select(Agenda).where(Agenda.parent_id == parent_id)
+        )
+        children = list(result.scalars().all())
+
+        for child in children:
+            child.level += level_diff
+            await self._update_descendant_levels(child.id, level_diff)
 
     # ============================================
     # Question Operations

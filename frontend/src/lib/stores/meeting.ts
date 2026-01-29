@@ -23,12 +23,15 @@ export interface MeetingDetail extends Meeting {
 export interface Agenda {
 	id: number;
 	meeting_id: number;
+	parent_id: number | null;
+	level: number;
 	order_num: number;
 	title: string;
 	description: string | null;
 	status: 'pending' | 'in_progress' | 'completed';
 	started_at_seconds: number | null;
 	questions: AgendaQuestion[];
+	children: Agenda[];
 }
 
 export interface AgendaQuestion {

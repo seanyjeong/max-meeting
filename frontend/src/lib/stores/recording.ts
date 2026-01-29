@@ -294,11 +294,13 @@ function createRecordingStore() {
 		): Promise<{ recordingId: number; success: boolean }> {
 			try {
 				// Step 1: Create recording entry
-				const createResponse = await api.post<{ data: { id: number } }>(
+				// API returns: { upload_id, recording_id, upload_url, max_chunk_size }
+				const createResponse = await api.post<{ recording_id: number; upload_id: string }>(
 					`/meetings/${meetingId}/recordings`,
 					{}
 				);
-				const recordingId = createResponse.data.id;
+				console.log('[recording] 녹음 생성 응답:', createResponse);
+				const recordingId = createResponse.recording_id;
 
 				// Step 2: Upload in chunks (1MB chunks)
 				const CHUNK_SIZE = 1024 * 1024; // 1MB

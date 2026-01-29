@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
-	import AgendaEditor from '$lib/components/AgendaEditor.svelte';
+	import AgendaEditor, { type AgendaItem } from '$lib/components/AgendaEditor.svelte';
 
 	interface MeetingType {
 		id: number;
@@ -52,14 +52,55 @@
 		title: string;
 		description: string;
 		questions: QuestionInput[];
+		children?: AgendaInput[];
 	}
-	let agendas: AgendaInput[] = [{ id: crypto.randomUUID(), title: '', description: '', questions: [] }];
+	let agendas: AgendaInput[] = [{ id: crypto.randomUUID(), title: '', description: '', questions: [], children: [] }];
 	let agendaTextInput = '';
 	let isParsing = false;
 	let generatingQuestionsFor: string | null = null;
 	let parseDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 	let isAutoPreviewEnabled = true;
 	let showAgendaEditor = false;
+
+	// Helper functions for AgendaEditor integration
+	function agendaToEditorItem(a: AgendaInput): AgendaItem {
+		return {
+			id: a.id,
+			title: a.title || '',
+			description: a.description || '',
+			children: (a.children || []).map(agendaToEditorItem)
+		};
+	}
+
+	function editorItemToAgenda(item: AgendaItem, existingMap: Map<string, AgendaInput>): AgendaInput {
+		const existing = existingMap.get(item.id);
+		return {
+			id: item.id,
+			title: item.title || '',
+			description: item.description || '',
+			questions: existing?.questions || [],
+			children: (item.children || []).map((c: AgendaItem) => editorItemToAgenda(c, existingMap))
+		};
+	}
+
+	function flattenAgendas(list: AgendaInput[]): Map<string, AgendaInput> {
+		const map = new Map<string, AgendaInput>();
+		for (const a of list) {
+			map.set(a.id, a);
+			if (a.children && a.children.length > 0) {
+				const childMap = flattenAgendas(a.children);
+				childMap.forEach((v, k) => map.set(k, v));
+			}
+		}
+		return map;
+	}
+
+	function handleEditorItemsChange(items: AgendaItem[]) {
+		console.log('[+page] handleEditorItemsChange called with', items.length, 'items');
+		const existingMap = flattenAgendas(agendas);
+		agendas = items.map((item) => editorItemToAgenda(item, existingMap));
+		console.log('[+page] agendas updated:', agendas);
+	}
 
 	onMount(async () => {
 		// 로그인 상태 확인 (브라우저에서만)
@@ -107,7 +148,7 @@
 	});
 
 	function addAgenda() {
-		agendas = [...agendas, { id: crypto.randomUUID(), title: '', description: '', questions: [] }];
+		agendas = [...agendas, { id: crypto.randomUUID(), title: '', description: '', questions: [], children: [] }];
 	}
 
 	function removeAgenda(id: string) {
@@ -144,7 +185,8 @@
 				id: crypto.randomUUID(),
 				title: item.title,
 				description: item.description || '',
-				questions: []
+				questions: [],
+				children: []
 			}));
 
 			if (parsedAgendas.length > 0) {
@@ -199,7 +241,8 @@
 					id: crypto.randomUUID(),
 					title: mainMatch[2].trim(),
 					description: '',
-					questions: []
+					questions: [],
+					children: []
 				};
 				subItems = [];
 			} else if (currentAgenda && isSubItem) {
@@ -213,7 +256,8 @@
 					id: crypto.randomUUID(),
 					title: trimmedLine.replace(/^[-\*\•]\s*/, '').trim(),
 					description: '',
-					questions: []
+					questions: [],
+					children: []
 				};
 				subItems = [];
 			} else if (currentAgenda && !isSubItem) {
@@ -226,7 +270,8 @@
 					id: crypto.randomUUID(),
 					title: trimmedLine.replace(/^[-\*\•]\s*/, '').trim(),
 					description: '',
-					questions: []
+					questions: [],
+					children: []
 				};
 				subItems = [];
 			}
@@ -724,16 +769,8 @@
 						</button>
 					</div>
 					<AgendaEditor
-						items={agendas.map((a) => ({ id: a.id, title: a.title, description: a.description }))}
-						onItemsChange={(items) => {
-							agendas = items.map((item) => {
-								const existingAgenda = agendas.find((a) => a.id === item.id);
-								return {
-									...item,
-									questions: existingAgenda?.questions || []
-								};
-							});
-						}}
+						items={agendas.map(agendaToEditorItem)}
+						onItemsChange={handleEditorItemsChange}
 					/>
 				{:else}
 					<div class="space-y-4">

@@ -279,119 +279,165 @@ Now generate questions for the given agenda:
         meeting_title: str | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Parse raw text to extract structured agenda items.
+        Parse raw text to extract structured agenda items with hierarchical structure.
 
         Args:
             raw_text: User-provided text containing agenda items
             meeting_title: Optional meeting title for additional context
 
         Returns:
-            List of dicts with "title" and "description" keys
+            List of dicts with "title", "description", and "children" keys (recursive structure)
         """
         system_prompt = (
             "You are an expert at structuring meeting agendas. "
-            "Extract agenda items from text and format them consistently. "
+            "Extract agenda items from text and format them as a hierarchical tree structure. "
             "Always respond in Korean unless the input text is in another language."
         )
 
         context_text = f"\nMeeting Context: {meeting_title}" if meeting_title else ""
 
-        prompt = f"""Extract meeting agenda items from the following text and return them as a structured JSON array.{context_text}
+        prompt = f"""Extract meeting agenda items from the following text and return them as a HIERARCHICAL JSON array.{context_text}
 
 Input Text:
 {raw_text}
 
 Requirements:
-1. Each agenda item must have "title" (string) and "description" (string) fields
-2. IMPORTANT: Detect hierarchical structure in the input:
-   - Main agenda items (numbered like "1.", "2.", "3." or top-level bullets) become separate agendas
-   - Sub-items (indented, using "  -", "    *", "  a)", "  1)", etc.) are NOT separate agendas
-   - Sub-items should be merged into the parent agenda's "description" field
-   - Keep sub-item formatting (bullet points, dashes) in the description for readability
-3. **Complex Format Recognition** - Recognize these numbering systems as main agenda markers:
-   - Roman numerals: "I.", "II.", "III." or "i.", "ii.", "iii."
-   - Korean numbering: "가.", "나.", "다." or "ㄱ.", "ㄴ.", "ㄷ."
-   - Korean legal format: "제1조", "제2조", "제1항", "제2항"
-   - Circled numbers: "①", "②", "③" or "㉠", "㉡", "㉢"
-   - Parenthetical: "(1)", "(a)", "1)", "a)"
-4. **Contextual Auto-Grouping** - For unstructured input (no clear numbering or bullets):
-   - Group semantically related items together (e.g., related questions, similar topics)
-   - Generate a meaningful group title automatically from the content
-   - Place individual related items into the description field
-5. Remove numbering or bullet points from main titles only
-6. If no description or sub-items exist, use an empty string for description
-7. Extract up to 20 main agenda items maximum
-8. Preserve the order of items as they appear in the text
-9. Do not add information that is not present in the source text
+1. Each agenda item must have:
+   - "title" (string): The agenda item title
+   - "description" (string or null): Optional detailed description
+   - "children" (array): Sub-items as nested agenda objects (same structure, can be empty array)
 
-Example 1 (basic numbered list):
+2. IMPORTANT: Detect hierarchical structure in the input:
+   - Main agenda items (numbered like "1.", "2.", "3.") become top-level items
+   - Sub-items (indented with "  -", "    *", "  a)", "  1)", etc.) become CHILDREN, not merged into description
+   - Deeply nested items become children of children (unlimited depth)
+
+3. **Complex Format Recognition** - Recognize these as hierarchy markers:
+   - Level 1: "1.", "I.", "가.", "제1조", "①", "(1)"
+   - Level 2: "  -", "  a)", "  1)", "  1항", "> ", "  ㄴ", indented bullets
+   - Level 3+: further indentation, "    ㄴ", sub-numbering
+   - Korean-style markers: "ㄴ" (ㄴ) is used as a sub-bullet in Korean documents
+
+4. **Contextual Auto-Grouping** - For unstructured input:
+   - Group semantically related items under auto-generated parent titles
+   - Related questions/topics become children of a group
+
+5. Remove numbering from titles but preserve hierarchy
+6. Extract up to 20 main agenda items, unlimited children
+7. Preserve the order as they appear
+
+Example 1 (hierarchical structure):
 1. 예산안 심의
    - 2024년 예산 검토
-   - 비용 절감 방안 논의
+   - 비용 절감 방안
+     a) 인건비 절감
+     b) 운영비 절감
 2. 인사 발표
-   - 신규 채용 현황
-3. 기타 안건
 
 Expected output:
 [
-  {{"title": "예산안 심의", "description": "- 2024년 예산 검토\\n- 비용 절감 방안 논의"}},
-  {{"title": "인사 발표", "description": "- 신규 채용 현황"}},
-  {{"title": "기타 안건", "description": ""}}
+  {{
+    "title": "예산안 심의",
+    "description": null,
+    "children": [
+      {{"title": "2024년 예산 검토", "description": null, "children": []}},
+      {{
+        "title": "비용 절감 방안",
+        "description": null,
+        "children": [
+          {{"title": "인건비 절감", "description": null, "children": []}},
+          {{"title": "운영비 절감", "description": null, "children": []}}
+        ]
+      }}
+    ]
+  }},
+  {{"title": "인사 발표", "description": null, "children": []}}
 ]
 
-Example 2 (Roman numerals):
-I. Quarterly Financial Review
-   - Revenue analysis
-   - Budget variance report
-II. Product Launch Plan
-III. Marketing Strategy
-
-Expected output:
-[
-  {{"title": "Quarterly Financial Review", "description": "- Revenue analysis\\n- Budget variance report"}},
-  {{"title": "Product Launch Plan", "description": ""}},
-  {{"title": "Marketing Strategy", "description": ""}}
-]
-
-Example 3 (Korean legal format):
+Example 2 (Korean legal format):
 제1조 회의 목적
    1항 분기 실적 검토
    2항 향후 계획 수립
 제2조 예산 승인
-   1항 예산안 심의
-   2항 집행 계획 확정
 
 Expected output:
 [
-  {{"title": "회의 목적", "description": "1항 분기 실적 검토\\n2항 향후 계획 수립"}},
-  {{"title": "예산 승인", "description": "1항 예산안 심의\\n2항 집행 계획 확정"}}
+  {{
+    "title": "회의 목적",
+    "description": null,
+    "children": [
+      {{"title": "분기 실적 검토", "description": null, "children": []}},
+      {{"title": "향후 계획 수립", "description": null, "children": []}}
+    ]
+  }},
+  {{"title": "예산 승인", "description": null, "children": []}}
 ]
 
-Example 4 (unstructured list with auto-grouping):
-프로젝트 일정은 어떻게 되나요?
-예산은 충분한가요?
-팀원 충원 계획은?
-기술 스택은 확정되었나요?
-보안 검토는 완료되었나요?
+Example 3 (Korean > and ㄴ markers):
+1. 협업 프로그램 안내
+ > 1차 협의 내용 공유
+ > 상품 메뉴얼
+   - 재수종합 + 대치학사
+   - 예체능종합 + 체대입시
+2. 장학금 이벤트
+  ㄴ 장학금 제도 도입
+  ㄴ 지점별 1명 전액 장학금
 
 Expected output:
 [
-  {{"title": "프로젝트 기획 및 자원", "description": "- 프로젝트 일정은 어떻게 되나요?\\n- 예산은 충분한가요?\\n- 팀원 충원 계획은?"}},
-  {{"title": "기술 및 보안", "description": "- 기술 스택은 확정되었나요?\\n- 보안 검토는 완료되었나요?"}}
+  {{
+    "title": "협업 프로그램 안내",
+    "description": null,
+    "children": [
+      {{"title": "1차 협의 내용 공유", "description": null, "children": []}},
+      {{
+        "title": "상품 메뉴얼",
+        "description": null,
+        "children": [
+          {{"title": "재수종합 + 대치학사", "description": null, "children": []}},
+          {{"title": "예체능종합 + 체대입시", "description": null, "children": []}}
+        ]
+      }}
+    ]
+  }},
+  {{
+    "title": "장학금 이벤트",
+    "description": null,
+    "children": [
+      {{"title": "장학금 제도 도입", "description": null, "children": []}},
+      {{"title": "지점별 1명 전액 장학금", "description": null, "children": []}}
+    ]
+  }}
 ]
 
-Output format:
+Example 4 (auto-grouping unstructured):
+프로젝트 일정 확인
+예산 논의
+팀원 충원 계획
+기술 스택 결정
+
+Expected output:
 [
-  {{"title": "Budget Review", "description": "- Review Q4 budget allocation\\n- Discuss cost savings"}},
-  {{"title": "New Project Approval", "description": ""}}
+  {{
+    "title": "프로젝트 기획",
+    "description": null,
+    "children": [
+      {{"title": "프로젝트 일정 확인", "description": null, "children": []}},
+      {{"title": "예산 논의", "description": null, "children": []}},
+      {{"title": "팀원 충원 계획", "description": null, "children": []}}
+    ]
+  }},
+  {{"title": "기술 스택 결정", "description": null, "children": []}}
 ]
+
+Return a valid JSON array with the hierarchical structure.
 """
 
         try:
             result = await self._provider.generate_json(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                max_tokens=2048,
+                max_tokens=4096,
                 temperature=0.3,
             )
 
@@ -406,14 +452,31 @@ Output format:
                 logger.warning(f"Unexpected response format: {result}")
                 agendas = []
 
-            # Validate and normalize each agenda item
+            # Recursively validate and normalize agenda items
+            def normalize_item(item: dict, depth: int = 0) -> dict | None:
+                if not isinstance(item, dict) or "title" not in item:
+                    return None
+                if depth > 10:  # Prevent infinite recursion
+                    return None
+
+                children = []
+                if "children" in item and isinstance(item["children"], list):
+                    for child in item["children"]:
+                        normalized_child = normalize_item(child, depth + 1)
+                        if normalized_child:
+                            children.append(normalized_child)
+
+                return {
+                    "title": str(item["title"]).strip()[:200],
+                    "description": str(item.get("description") or "").strip()[:5000] or None,
+                    "children": children,
+                }
+
             normalized = []
-            for item in agendas[:20]:  # Limit to 20 items
-                if isinstance(item, dict) and "title" in item:
-                    normalized.append({
-                        "title": str(item["title"]).strip()[:200],  # Max 200 chars
-                        "description": str(item.get("description", "")).strip()[:5000],  # Max 5000 chars
-                    })
+            for item in agendas[:20]:  # Limit to 20 top-level items
+                normalized_item = normalize_item(item)
+                if normalized_item:
+                    normalized.append(normalized_item)
 
             return normalized
 

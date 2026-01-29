@@ -56,6 +56,61 @@ def publish_progress(
         logger.warning(f"Failed to publish progress: {e}")
 
 
+def get_audio_duration(input_path: str) -> float:
+    """
+    Get audio duration using ffprobe, with fallback for WebM files without metadata.
+
+    Args:
+        input_path: Path to audio file
+
+    Returns:
+        Duration in seconds
+    """
+    # First try ffprobe
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            input_path
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode == 0:
+        duration_str = result.stdout.strip()
+        if duration_str and duration_str != "N/A":
+            try:
+                return float(duration_str)
+            except ValueError:
+                pass
+
+    # Fallback: Use ffmpeg to process file and get actual duration
+    logger.info("Duration metadata not available, using ffmpeg to determine duration")
+    result = subprocess.run(
+        [
+            "ffmpeg", "-i", input_path,
+            "-f", "null", "-"
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    # Parse duration from ffmpeg stderr (format: time=00:00:20.70)
+    import re
+    time_match = re.search(r'time=(\d+):(\d+):(\d+\.?\d*)', result.stderr)
+    if time_match:
+        hours = int(time_match.group(1))
+        minutes = int(time_match.group(2))
+        seconds = float(time_match.group(3))
+        duration = hours * 3600 + minutes * 60 + seconds
+        logger.info(f"Determined duration via ffmpeg: {duration:.1f}s")
+        return duration
+
+    raise RuntimeError(f"Could not determine audio duration for {input_path}")
+
+
 def split_audio_into_chunks(
     input_path: str,
     output_dir: str,
@@ -74,22 +129,8 @@ def split_audio_into_chunks(
     """
     chunk_seconds = chunk_minutes * 60
 
-    # Get audio duration using ffprobe
-    result = subprocess.run(
-        [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            input_path
-        ],
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"ffprobe failed: {result.stderr}")
-
-    duration = float(result.stdout.strip())
+    # Get audio duration (handles WebM files without metadata)
+    duration = get_audio_duration(input_path)
     num_chunks = int(duration / chunk_seconds) + (1 if duration % chunk_seconds > 0 else 0)
 
     logger.info(f"Splitting {duration:.1f}s audio into {num_chunks} chunks")

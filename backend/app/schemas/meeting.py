@@ -64,16 +64,24 @@ AttendeeResponse.model_rebuild()
 
 
 class AgendaBrief(BaseModel):
-    """Brief agenda info for meeting response."""
+    """Brief agenda info for meeting response with hierarchical structure."""
 
     id: int
     order_num: int
     title: str
+    description: Optional[str] = None
     status: str
     started_at_seconds: Optional[int] = None
+    parent_id: Optional[int] = None
+    level: int = 0
     questions: list[QuestionResponse] = []
+    children: list["AgendaBrief"] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Update forward reference for AgendaBrief self-reference
+AgendaBrief.model_rebuild()
 
 
 class MeetingBase(BaseModel):

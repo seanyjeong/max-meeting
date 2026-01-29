@@ -131,7 +131,11 @@ class MeetingService:
         if include_details:
             query = query.options(
                 selectinload(Meeting.attendees).selectinload(MeetingAttendee.contact),
-                selectinload(Meeting.agendas).selectinload(Agenda.questions),
+                selectinload(Meeting.agendas)
+                    .selectinload(Agenda.questions),
+                selectinload(Meeting.agendas)
+                    .selectinload(Agenda.children)
+                    .selectinload(Agenda.questions),
             )
 
         result = await self.db.execute(query)

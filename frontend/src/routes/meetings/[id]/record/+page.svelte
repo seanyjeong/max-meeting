@@ -126,6 +126,12 @@
 
 	// New handlers for notes/sketch
 	function handleNoteChange(agendaId: number, content: string) {
+		// agendaId가 유효한지 확인
+		if (!agendaId || typeof agendaId !== 'number' || isNaN(agendaId)) {
+			console.warn('[record] handleNoteChange: 유효하지 않은 agendaId:', agendaId);
+			return;
+		}
+		console.log('[record] handleNoteChange: agendaId:', agendaId, '내용 길이:', content.length);
 		notesStore.saveNote(agendaId, content);
 		agendaNotes = new Map(agendaNotes.set(agendaId, content));
 	}
@@ -394,7 +400,12 @@
 					textContent={agendaNotes.get(meeting.agendas[currentAgendaIndex]?.id) || ''}
 					sketchSnapshot={agendaSketches.get(meeting.agendas[currentAgendaIndex]?.id)}
 					onTabChange={handleTabChange}
-					onTextChange={(content) => handleNoteChange(meeting.agendas[currentAgendaIndex].id, content)}
+					onTextChange={(content) => {
+					const agenda = meeting?.agendas?.[currentAgendaIndex];
+					if (agenda?.id) {
+						handleNoteChange(agenda.id, content);
+					}
+				}}
 					onSketchChange={handleSketchChange}
 				/>
 			</div>

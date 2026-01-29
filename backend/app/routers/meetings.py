@@ -28,6 +28,36 @@ from app.services.meeting import MeetingService
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 
+def _convert_agenda_to_brief(agenda) -> AgendaBrief:
+    """Recursively convert an agenda model to AgendaBrief with children."""
+    children = []
+    if hasattr(agenda, 'children') and agenda.children:
+        children = [_convert_agenda_to_brief(child) for child in agenda.children]
+
+    return AgendaBrief(
+        id=agenda.id,
+        order_num=agenda.order_num,
+        title=agenda.title,
+        description=agenda.description,
+        status=agenda.status.value,
+        started_at_seconds=agenda.started_at_seconds,
+        parent_id=agenda.parent_id,
+        level=agenda.level,
+        questions=[
+            QuestionResponse(
+                id=q.id,
+                agenda_id=q.agenda_id,
+                question=q.question,
+                order_num=q.order_num,
+                is_generated=q.is_generated,
+                answered=q.answered,
+            )
+            for q in agenda.questions
+        ],
+        children=children,
+    )
+
+
 def _meeting_to_detail_response(meeting) -> MeetingDetailResponse:
     """Convert a meeting model to a detail response with nested data."""
     attendees = []
@@ -49,26 +79,11 @@ def _meeting_to_detail_response(meeting) -> MeetingDetailResponse:
             contact=contact_brief,
         ))
 
+    # Build hierarchical agenda structure (only root-level items)
     agendas = [
-        AgendaBrief(
-            id=agenda.id,
-            order_num=agenda.order_num,
-            title=agenda.title,
-            status=agenda.status.value,
-            started_at_seconds=agenda.started_at_seconds,
-            questions=[
-                QuestionResponse(
-                    id=q.id,
-                    agenda_id=q.agenda_id,
-                    question=q.question,
-                    order_num=q.order_num,
-                    is_generated=q.is_generated,
-                    answered=q.answered,
-                )
-                for q in agenda.questions
-            ],
-        )
+        _convert_agenda_to_brief(agenda)
         for agenda in meeting.agendas
+        if agenda.parent_id is None
     ]
 
     return MeetingDetailResponse(

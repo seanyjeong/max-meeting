@@ -63,6 +63,7 @@ class AgendaCreate(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
+    parent_id: int | None = Field(default=None, description="Parent agenda ID for hierarchical structure")
 
 
 class AgendaUpdate(BaseModel):
@@ -73,18 +74,22 @@ class AgendaUpdate(BaseModel):
     order_num: int | None = Field(default=None, ge=0)
     status: AgendaStatus | None = None
     started_at_seconds: int | None = Field(default=None, ge=0)
+    parent_id: int | None = Field(default=None, description="Parent agenda ID (set to move in hierarchy)")
 
 
 class AgendaResponse(AgendaBase):
-    """Schema for agenda response."""
+    """Schema for agenda response with hierarchical structure."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     meeting_id: int
+    parent_id: int | None = None
+    level: int = 0
     started_at_seconds: int | None = None
     created_at: datetime
     questions: list[QuestionResponse] = []
+    children: list["AgendaResponse"] = []
 
 
 class AgendaListResponse(BaseModel):
@@ -143,10 +148,11 @@ class AgendaParseResponse(BaseModel):
 
 
 class ParsedAgendaItem(BaseModel):
-    """Single parsed agenda item (preview, not saved)."""
+    """Single parsed agenda item (preview, not saved) with hierarchical structure."""
 
     title: str
     description: str | None = None
+    children: list["ParsedAgendaItem"] = []
 
 
 class AgendaParsePreviewResponse(BaseModel):
@@ -154,3 +160,35 @@ class AgendaParsePreviewResponse(BaseModel):
 
     items: list[ParsedAgendaItem]
     meta: dict
+
+
+# ============================================
+# Move Agenda Schemas (for hierarchy operations)
+# ============================================
+
+
+class AgendaMoveRequest(BaseModel):
+    """Schema for moving an agenda in the hierarchy."""
+
+    new_parent_id: int | None = Field(
+        default=None,
+        description="New parent ID. Set to null to move to root level."
+    )
+    new_order_num: int = Field(
+        ...,
+        ge=0,
+        description="New order within the parent (or root level)"
+    )
+
+
+class AgendaMoveResponse(BaseModel):
+    """Schema for move agenda response."""
+
+    success: bool = True
+    agenda: "AgendaResponse"
+
+
+# Rebuild models for forward references
+AgendaResponse.model_rebuild()
+ParsedAgendaItem.model_rebuild()
+AgendaMoveResponse.model_rebuild()

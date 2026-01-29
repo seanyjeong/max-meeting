@@ -24,9 +24,9 @@ if config.config_file_name is not None:
 # Set target_metadata for autogenerate support
 target_metadata = Base.metadata
 
-# Get DATABASE_URL from environment if not set in ini
-if not config.get_main_option("sqlalchemy.url"):
-    database_url = os.getenv("DATABASE_URL", "postgresql://maxmeeting:password@localhost:5432/maxmeeting")
+# Get DATABASE_URL from environment (takes precedence over ini file)
+database_url = os.getenv("DATABASE_URL")
+if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 
 

@@ -291,9 +291,9 @@
 				<div class="flex flex-wrap gap-2">
 					{#each $currentMeeting.attendees as attendee (attendee.id)}
 						<span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700">
-							{attendee.contact?.name || attendee.name}
-							{#if attendee.contact?.role || attendee.role}
-								<span class="ml-1 text-gray-500">({attendee.contact?.role || attendee.role})</span>
+							{attendee.name}
+							{#if attendee.role}
+								<span class="ml-1 text-gray-500">({attendee.role})</span>
 							{/if}
 						</span>
 					{/each}

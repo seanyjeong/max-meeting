@@ -3,8 +3,11 @@
 import asyncio
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Annotated, AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -184,6 +187,12 @@ async def upload_chunk(
             recording.status = RecordingStatus.UPLOADED
 
         await db.commit()
+
+        # Trigger STT processing after upload is complete
+        if is_complete:
+            from workers.tasks.stt import process_recording
+            process_recording.delay(recording_id)
+            logger.info(f"STT processing triggered for recording {recording_id}")
 
         return UploadProgressResponse(
             upload_id=recording.safe_filename,

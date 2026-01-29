@@ -12,6 +12,8 @@ from app.models import AgendaQuestion
 from app.schemas.agenda import (
     AgendaCreate,
     AgendaListResponse,
+    AgendaMoveRequest,
+    AgendaMoveResponse,
     AgendaParsePreviewResponse,
     AgendaParseRequest,
     AgendaParseResponse,
@@ -43,14 +45,33 @@ async def list_agendas(
     meeting_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
+    tree: bool = True,
 ):
-    """List all agendas for a meeting with their questions."""
+    """
+    List all agendas for a meeting with their questions.
+
+    Args:
+        tree: If true (default), returns hierarchical structure with children.
+              If false, returns flat list.
+    """
     service = AgendaService(db)
     try:
-        agendas = await service.list_agendas(meeting_id)
+        if tree:
+            agendas = await service.list_agendas_tree(meeting_id)
+        else:
+            agendas = await service.list_agendas(meeting_id)
+
+        def convert_agenda(agenda) -> AgendaResponse:
+            """Convert agenda with children recursively."""
+            response = AgendaResponse.model_validate(agenda)
+            if hasattr(agenda, 'children') and agenda.children:
+                response.children = [convert_agenda(c) for c in agenda.children]
+            return response
+
+        data = [convert_agenda(a) for a in agendas]
         return AgendaListResponse(
-            data=[AgendaResponse.model_validate(a) for a in agendas],
-            meta={"total": len(agendas)},
+            data=data,
+            meta={"total": len(agendas), "tree": tree},
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -115,34 +136,30 @@ async def parse_agenda_text(
     current_user: Annotated[dict, Depends(get_current_user)],
 ):
     """
-    Parse raw text to create multiple agendas.
+    Parse raw text to create multiple agendas with hierarchical structure.
 
     This endpoint uses Gemini AI to extract structured agenda items
-    from unstructured text (e.g., pasted from notes, emails, etc).
+    from unstructured text. Sub-items are created as child agendas.
+    Questions are only auto-generated for root-level agendas.
     """
     agenda_service = AgendaService(db)
     llm_service = get_llm_service()
 
-    try:
-        # First verify the meeting exists (using AgendaService which has the method)
-        meeting = await agenda_service.get_meeting_or_raise(meeting_id)
-
-        # Parse the text using LLM
-        parsed_items = await llm_service.parse_agenda_text(
-            raw_text=body.text,
-            meeting_title=meeting.title,
+    async def create_agenda_recursive(
+        item: dict,
+        parent_id: int | None = None,
+        is_root: bool = True
+    ) -> AgendaResponse:
+        """Recursively create agenda and its children."""
+        agenda_data = AgendaCreate(
+            title=item["title"],
+            description=item.get("description"),
+            parent_id=parent_id,
         )
+        agenda = await agenda_service.create_agenda(meeting_id, agenda_data)
 
-        # Create agenda items in the database
-        created_agendas = []
-        for item in parsed_items:
-            agenda_data = AgendaCreate(
-                title=item["title"],
-                description=item["description"] if item["description"] else None,
-            )
-            agenda = await agenda_service.create_agenda(meeting_id, agenda_data)
-
-            # Auto-generate questions for each parsed agenda
+        # Auto-generate questions only for root-level agendas
+        if is_root:
             try:
                 questions_text = await generate_questions(
                     agenda_title=agenda.title,
@@ -160,19 +177,60 @@ async def parse_agenda_text(
                     )
                     db.add(question)
 
-                await db.commit()
-                await db.refresh(agenda)
+                await db.flush()
 
             except Exception as e:
                 logger.warning(f"Failed to auto-generate questions for agenda {agenda.id}: {e}")
-                # Question generation failure should not block agenda creation
-                await db.commit()
 
-            created_agendas.append(AgendaResponse.model_validate(agenda))
+        # Create children recursively
+        children_responses = []
+        for child_item in item.get("children", []):
+            child_response = await create_agenda_recursive(
+                child_item,
+                parent_id=agenda.id,
+                is_root=False
+            )
+            children_responses.append(child_response)
+
+        # Build response with children
+        response = AgendaResponse.model_validate(agenda)
+        response.children = children_responses
+        return response
+
+    try:
+        # First verify the meeting exists
+        meeting = await agenda_service.get_meeting_or_raise(meeting_id)
+
+        # Parse the text using LLM (now returns hierarchical structure)
+        parsed_items = await llm_service.parse_agenda_text(
+            raw_text=body.text,
+            meeting_title=meeting.title,
+        )
+
+        # Create agenda items with hierarchy
+        created_agendas = []
+        for item in parsed_items:
+            agenda_response = await create_agenda_recursive(item)
+            created_agendas.append(agenda_response)
+
+        await db.commit()
+
+        # Count total agendas (including children)
+        def count_total(items: list) -> int:
+            total = len(items)
+            for item in items:
+                if hasattr(item, 'children'):
+                    total += count_total(item.children)
+            return total
 
         return AgendaParseResponse(
             data=created_agendas,
-            meta={"total": len(created_agendas), "source": "llm_parsed"},
+            meta={
+                "total": count_total(created_agendas),
+                "root_count": len(created_agendas),
+                "source": "llm_parsed",
+                "hierarchical": True,
+            },
         )
 
     except ValueError as e:
@@ -201,31 +259,49 @@ async def parse_agenda_preview(
     Parse raw text to preview agenda items without saving.
 
     This endpoint uses Gemini AI to extract structured agenda items
-    from unstructured text. Unlike /meetings/{id}/agendas/parse,
-    this does NOT save anything to the database - it's for preview
-    before creating a meeting.
+    from unstructured text with hierarchical structure.
+    Unlike /meetings/{id}/agendas/parse, this does NOT save anything
+    to the database - it's for preview before creating a meeting.
     """
     llm_service = get_llm_service()
 
+    def convert_to_preview(item: dict) -> ParsedAgendaItem:
+        """Recursively convert parsed item to preview format."""
+        children = [
+            convert_to_preview(child)
+            for child in item.get("children", [])
+        ]
+        return ParsedAgendaItem(
+            title=item["title"],
+            description=item.get("description"),
+            children=children,
+        )
+
     try:
-        # Parse the text using LLM
+        # Parse the text using LLM (returns hierarchical structure)
         parsed_items = await llm_service.parse_agenda_text(
             raw_text=body.text,
             meeting_title=None,  # No meeting context for preview
         )
 
-        # Convert to preview response format
-        items = [
-            ParsedAgendaItem(
-                title=item["title"],
-                description=item.get("description"),
-            )
-            for item in parsed_items
-        ]
+        # Convert to preview response format with hierarchy
+        items = [convert_to_preview(item) for item in parsed_items]
+
+        # Count total including children
+        def count_total(items_list: list) -> int:
+            total = len(items_list)
+            for item in items_list:
+                total += count_total(item.children)
+            return total
 
         return AgendaParsePreviewResponse(
             items=items,
-            meta={"total": len(items), "source": "llm_parsed"},
+            meta={
+                "total": count_total(items),
+                "root_count": len(items),
+                "source": "llm_parsed",
+                "hierarchical": True,
+            },
         )
 
     except Exception as e:
@@ -301,6 +377,37 @@ async def reorder_agendas(
         return ReorderResponse(success=True, updated_count=updated_count)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/agendas/{agenda_id}/move", response_model=AgendaMoveResponse)
+async def move_agenda(
+    agenda_id: int,
+    data: AgendaMoveRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """
+    Move an agenda to a new parent and/or position in the hierarchy.
+
+    This endpoint handles:
+    - Moving to a different parent (nesting)
+    - Moving to root level (set new_parent_id to null)
+    - Reordering within the same parent level
+
+    Validation:
+    - Cannot move an agenda to its own descendant
+    - Parent must belong to the same meeting
+    """
+    service = AgendaService(db)
+    try:
+        agenda = await service.move_agenda(agenda_id, data)
+        await db.commit()
+        return AgendaMoveResponse(
+            success=True,
+            agenda=AgendaResponse.model_validate(agenda),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================

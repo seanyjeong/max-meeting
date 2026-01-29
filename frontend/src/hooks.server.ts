@@ -5,8 +5,9 @@
  * 프로덕션 환경에서는 이 hooks가 /api 요청을 백엔드로 프록시함.
  */
 import type { Handle } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+const BACKEND_URL = env.BACKEND_URL || 'http://localhost:8000';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// /api 경로로 들어오는 요청을 백엔드로 프록시
