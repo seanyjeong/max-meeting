@@ -90,7 +90,7 @@
 </script>
 
 <div
-	class="fixed top-0 left-0 right-0 z-50 h-14 bg-white dark:bg-gray-900 border-b-2 {statusColor} transition-colors duration-200"
+	class="fixed top-16 left-0 right-0 z-40 h-14 bg-white dark:bg-gray-900 border-b-2 {statusColor} transition-colors duration-200 shadow-sm"
 	role="region"
 	aria-label="녹음 컨트롤 바"
 >

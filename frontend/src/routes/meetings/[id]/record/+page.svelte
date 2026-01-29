@@ -344,8 +344,8 @@
 		onResume={handleResumeRecording}
 	/>
 
-	<!-- Main content area (below bar) -->
-	<div class="pt-14">
+	<!-- Main content area (below nav + recording bar) -->
+	<div class="pt-[120px]">
 		<!-- Breadcrumb -->
 		<div class="px-4 py-3 border-b bg-white">
 			<div class="flex items-center justify-between">
@@ -372,8 +372,8 @@
 			</div>
 		</div>
 
-		<!-- Split layout -->
-		<div class="flex h-[calc(100vh-56px-52px)]">
+		<!-- Split layout (100vh - nav 64px - bar 56px - breadcrumb 52px) -->
+		<div class="flex h-[calc(100vh-172px)]">
 			<!-- Left: Agenda Panel (25%) -->
 			<div class="w-1/4 min-w-64 max-w-80 border-r">
 				<AgendaNotePanel
