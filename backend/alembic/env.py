@@ -27,6 +27,8 @@ target_metadata = Base.metadata
 # Get DATABASE_URL from environment (takes precedence over ini file)
 database_url = os.getenv("DATABASE_URL")
 if database_url:
+    # Convert async driver to sync for migrations
+    database_url = database_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
     config.set_main_option("sqlalchemy.url", database_url)
 
 

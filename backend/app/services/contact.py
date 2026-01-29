@@ -99,10 +99,11 @@ class ContactService:
 
         contact = Contact(
             name=data.name,
-            role=data.role,
+            position=data.role,
             organization=data.organization,
             phone_encrypted=phone_encrypted,
             email_encrypted=email_encrypted,
+            notes=data.notes,
         )
 
         self.db.add(contact)
@@ -136,6 +137,11 @@ class ContactService:
         if "email" in update_data:
             email = update_data.pop("email")
             contact.email_encrypted = encrypt_pii(email) if email else None
+
+        # Map role -> position for DB field
+        if "role" in update_data:
+            role_value = update_data.pop("role")
+            contact.position = role_value
 
         # Update remaining fields
         for field, value in update_data.items():
@@ -174,8 +180,8 @@ def contact_to_response_dict(contact: Contact) -> dict:
         "phone": decrypt_pii(contact.phone_encrypted) if contact.phone_encrypted else None,
         "email": decrypt_pii(contact.email_encrypted) if contact.email_encrypted else None,
         "organization": contact.organization,
-        "role": contact.role,
-        "notes": None,  # Notes field not in model, reserved for future
+        "role": contact.position,  # DB column is 'position', API returns 'role'
+        "notes": contact.notes,
         "created_at": contact.created_at,
         "updated_at": contact.updated_at,
     }

@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Index, Integer, LargeBinary, String
+from sqlalchemy import Index, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin
@@ -32,11 +32,12 @@ class Contact(Base, TimestampMixin, SoftDeleteMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    position: Mapped[str | None] = mapped_column(String(50), nullable=True)
     organization: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # PII encrypted columns (using pgcrypto)
     phone_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     email_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     meeting_attendees: Mapped[list["MeetingAttendee"]] = relationship(

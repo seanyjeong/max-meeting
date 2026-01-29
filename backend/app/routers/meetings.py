@@ -68,7 +68,7 @@ def _meeting_to_detail_response(meeting) -> MeetingDetailResponse:
                 id=att.contact.id,
                 name=att.contact.name,
                 organization=att.contact.organization,
-                role=att.contact.role,
+                role=att.contact.position,
             )
         attendees.append(AttendeeResponse(
             id=att.id,

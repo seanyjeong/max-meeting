@@ -2,19 +2,18 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, CreatedAtMixin
-from app.models.enums import RecordingStatus
+from app.models.base import Base, TimestampMixin, CreatedAtMixin
 
 if TYPE_CHECKING:
     from app.models.meeting import Meeting
     from app.models.task import TaskTracking
 
 
-class Recording(Base, CreatedAtMixin):
+class Recording(Base, TimestampMixin):
     """Recording file model."""
 
     __tablename__ = "recordings"
@@ -28,18 +27,15 @@ class Recording(Base, CreatedAtMixin):
     )
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     original_filename: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    safe_filename: Mapped[str] = mapped_column(String(100), nullable=False)
-    mime_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    format: Mapped[str] = mapped_column(String(20), default="webm")
+    safe_filename: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    mime_type: Mapped[str] = mapped_column(String(50), nullable=False, default="audio/webm")
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[RecordingStatus] = mapped_column(
-        Enum(RecordingStatus, name="recording_status"),
-        default=RecordingStatus.UPLOADED,
-    )
+    format: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="uploaded")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Relationships
     meeting: Mapped["Meeting"] = relationship(
@@ -52,7 +48,6 @@ class Recording(Base, CreatedAtMixin):
         back_populates="recording",
         cascade="all, delete-orphan",
         lazy="selectin",
-        order_by="Transcript.chunk_index",
     )
     task_trackings: Mapped[list["TaskTracking"]] = relationship(
         "TaskTracking",
