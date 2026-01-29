@@ -2,10 +2,11 @@
  * API Client - Minimal implementation for GET request
  */
 
+import { PUBLIC_API_URL } from '$env/static/public';
 import { refreshToken } from './stores/auth';
 import { goto } from '$app/navigation';
 
-const API_BASE = '/api/v1';
+const API_BASE = PUBLIC_API_URL || '/api/v1';
 
 interface UploadInitResponse {
 	upload_id: string;
