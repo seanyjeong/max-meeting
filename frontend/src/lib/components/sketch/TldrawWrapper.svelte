@@ -30,6 +30,7 @@
 	let reactRoot: any = null;
 	let editor: Editor | null = null;
 	let isPencilActive = $state(false);
+	let changeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	onMount(async () => {
 		if (!browser || !container) return;
@@ -55,9 +56,15 @@
 					}
 				}
 
-				// Listen for changes
+				// Listen for changes with debounce to prevent infinite loop
 				e.store.listen(() => {
-					onEditorChange?.();
+					if (changeDebounceTimer) {
+						clearTimeout(changeDebounceTimer);
+					}
+					changeDebounceTimer = setTimeout(() => {
+						onEditorChange?.();
+						changeDebounceTimer = null;
+					}, 300);
 				}, { source: 'user' });
 
 				// Pencil detection via pointer events
@@ -90,6 +97,10 @@
 	onDestroy(() => {
 		document.removeEventListener('pointerdown', handlePointerEvent);
 		document.removeEventListener('pointermove', handlePointerEvent);
+
+		if (changeDebounceTimer) {
+			clearTimeout(changeDebounceTimer);
+		}
 
 		if (reactRoot) {
 			reactRoot.unmount();
