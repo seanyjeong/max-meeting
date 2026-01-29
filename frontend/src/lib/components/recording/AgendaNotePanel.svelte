@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { untrack } from 'svelte';
 	import type { Agenda, AgendaQuestion } from '$lib/stores/meeting';
 
 	interface Props {
@@ -25,10 +26,16 @@
 	let expandedAgendaIds = $state<Set<number>>(new Set());
 	let noteDebounceTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
-	// Auto-expand current agenda (fix Set mutation for reactivity)
+	// Auto-expand current agenda (use untrack to avoid infinite loop)
 	$effect(() => {
-		if (agendas[currentAgendaIndex]) {
-			expandedAgendaIds = new Set([...expandedAgendaIds, agendas[currentAgendaIndex].id]);
+		const currentAgenda = agendas[currentAgendaIndex];
+		if (currentAgenda) {
+			const agendaId = currentAgenda.id;
+			untrack(() => {
+				if (!expandedAgendaIds.has(agendaId)) {
+					expandedAgendaIds = new Set([...expandedAgendaIds, agendaId]);
+				}
+			});
 		}
 	});
 
