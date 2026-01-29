@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { untrack } from 'svelte';
 	import type { Agenda, AgendaQuestion } from '$lib/stores/meeting';
 
 	interface Props {
@@ -15,7 +14,7 @@
 
 	let {
 		agendas,
-		currentAgendaIndex,
+		currentAgendaIndex = $bindable(),
 		notes,
 		onNextAgenda,
 		onQuestionToggle,
@@ -23,26 +22,13 @@
 		recordingTime
 	}: Props = $props();
 
-	let expandedAgendaIds = $state<Set<number>>(new Set());
-	let expandedQuestionIds = $state<Set<number>>(new Set());
 	let noteDebounceTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
-	// Auto-expand current agenda (use untrack to avoid infinite loop)
-	$effect(() => {
-		const currentAgenda = agendas[currentAgendaIndex];
-		if (currentAgenda) {
-			const agendaId = currentAgenda.id;
-			untrack(() => {
-				if (!expandedAgendaIds.has(agendaId)) {
-					expandedAgendaIds = new Set([...expandedAgendaIds, agendaId]);
-				}
-				// Auto-expand questions for current agenda
-				if (!expandedQuestionIds.has(agendaId)) {
-					expandedQuestionIds = new Set([...expandedQuestionIds, agendaId]);
-				}
-			});
-		}
-	});
+	// Current agenda
+	let currentAgenda = $derived(agendas[currentAgendaIndex]);
+	let noteContent = $derived(currentAgenda ? (notes.get(currentAgenda.id) || '') : '');
+	let answeredCount = $derived(currentAgenda ? currentAgenda.questions.filter(q => q.answered).length : 0);
+	let totalQuestions = $derived(currentAgenda ? currentAgenda.questions.length : 0);
 
 	// Cleanup on destroy
 	onDestroy(() => {
@@ -50,33 +36,15 @@
 		noteDebounceTimers.clear();
 	});
 
-	function toggleAgenda(agendaId: number) {
-		if (expandedAgendaIds.has(agendaId)) {
-			const newSet = new Set(expandedAgendaIds);
-			newSet.delete(agendaId);
-			expandedAgendaIds = newSet;
-		} else {
-			expandedAgendaIds = new Set([...expandedAgendaIds, agendaId]);
-		}
-	}
-
-	function toggleQuestions(agendaId: number) {
-		if (expandedQuestionIds.has(agendaId)) {
-			const newSet = new Set(expandedQuestionIds);
-			newSet.delete(agendaId);
-			expandedQuestionIds = newSet;
-		} else {
-			expandedQuestionIds = new Set([...expandedQuestionIds, agendaId]);
-		}
-	}
-
 	function handleQuestionToggle(question: AgendaQuestion) {
 		onQuestionToggle(question.id, !question.answered);
 	}
 
-	function handleNoteInput(agendaId: number, event: Event) {
+	function handleNoteInput(event: Event) {
+		if (!currentAgenda) return;
 		const target = event.target as HTMLTextAreaElement;
 		const content = target.value;
+		const agendaId = currentAgenda.id;
 
 		// Clear existing timer
 		const existingTimer = noteDebounceTimers.get(agendaId);
@@ -93,198 +61,191 @@
 		noteDebounceTimers.set(agendaId, timer);
 	}
 
-	function handleNextAgenda(agendaId: number) {
-		onNextAgenda(agendaId, recordingTime);
+	function goToPrevAgenda() {
+		if (currentAgendaIndex > 0) {
+			currentAgendaIndex--;
+		}
 	}
 
-	function isCurrentAgenda(index: number): boolean {
-		return index === currentAgendaIndex;
+	function goToNextAgenda() {
+		if (currentAgendaIndex < agendas.length - 1) {
+			// Mark transition with timestamp for recording
+			if (currentAgenda) {
+				onNextAgenda(currentAgenda.id, recordingTime);
+			}
+			currentAgendaIndex++;
+		}
 	}
 
-	function getAnsweredCount(questions: AgendaQuestion[]): number {
-		return questions.filter(q => q.answered).length;
+	function goToAgenda(index: number) {
+		if (index >= 0 && index < agendas.length) {
+			currentAgendaIndex = index;
+		}
 	}
 </script>
 
-<div class="w-full h-full bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-	<!-- Header -->
-	<div class="px-4 py-4 border-b border-gray-200 bg-gray-50">
-		<h3 class="text-base font-semibold text-gray-900">안건 및 메모</h3>
-	</div>
+<div class="w-full h-full bg-white flex flex-col overflow-hidden">
+	{#if currentAgenda}
+		<!-- Header with progress indicator -->
+		<div class="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+			<div class="flex items-center justify-between">
+				<span class="text-sm font-medium text-blue-600">
+					안건 {currentAgendaIndex + 1} / {agendas.length}
+				</span>
+				<!-- Mini progress dots -->
+				<div class="flex gap-1.5">
+					{#each agendas as _, i}
+						<button
+							type="button"
+							onclick={() => goToAgenda(i)}
+							class="w-2.5 h-2.5 rounded-full transition-all duration-200 {i === currentAgendaIndex ? 'bg-blue-600 scale-110' : i < currentAgendaIndex ? 'bg-blue-300' : 'bg-gray-300'}"
+							aria-label="안건 {i + 1}로 이동"
+						></button>
+					{/each}
+				</div>
+			</div>
+		</div>
 
-	<!-- Scrollable agenda list -->
-	<div class="flex-1 overflow-y-auto">
-		<div class="divide-y divide-gray-100">
-			{#each agendas as agenda, index (agenda.id)}
-				{@const isExpanded = expandedAgendaIds.has(agenda.id)}
-				{@const isQuestionsExpanded = expandedQuestionIds.has(agenda.id)}
-				{@const isCurrent = isCurrentAgenda(index)}
-				{@const noteContent = notes.get(agenda.id) || ''}
-				{@const answeredCount = getAnsweredCount(agenda.questions)}
-
-				<div
-					class="transition-colors duration-150"
-					class:bg-blue-50={isCurrent}
-					class:border-l-4={isCurrent}
-					class:border-blue-600={isCurrent}
-				>
-					<!-- Agenda header - iPad optimized touch target -->
-					<button
-						type="button"
-						onclick={() => toggleAgenda(agenda.id)}
-						aria-label="안건 {index + 1} {isExpanded ? '접기' : '펼치기'}"
-						aria-expanded={isExpanded}
-						class="w-full min-h-[56px] px-4 py-4 flex items-start gap-3 hover:bg-gray-50 transition-colors duration-150 text-left"
-						class:hover:bg-blue-100={isCurrent}
-					>
-						<div class="mt-1 flex-shrink-0">
-							{#if isExpanded}
-								<svg class="w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-								</svg>
-							{:else}
-								<svg class="w-5 h-5 text-gray-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-								</svg>
-							{/if}
-						</div>
-						<div class="flex-1 min-w-0">
-							<div class="flex items-center gap-2 flex-wrap">
-								<span
-									class="text-base font-medium"
-									class:text-blue-700={isCurrent}
-									class:text-gray-900={!isCurrent}
-								>
-									{index + 1}. {agenda.title}
-								</span>
-								{#if isCurrent}
-									<span class="px-2 py-1 text-xs font-medium bg-blue-600 text-white rounded">
-										진행중
-									</span>
-								{:else if agenda.status === 'completed'}
-									<span class="px-2 py-1 text-xs font-medium bg-gray-500 text-white rounded">
-										완료
-									</span>
-								{/if}
-							</div>
-							<!-- Preview description when collapsed -->
-							{#if !isExpanded && agenda.description}
-								<p class="mt-1 text-sm text-gray-500 line-clamp-1">
-									{agenda.description}
-								</p>
-							{/if}
-						</div>
-					</button>
-
-					<!-- Expanded content -->
-					{#if isExpanded}
-						<div class="px-4 pb-4 space-y-4">
-							<!-- Full description -->
-							{#if agenda.description}
-								<div class="bg-gray-50 rounded-lg p-3">
-									<p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-										{agenda.description}
-									</p>
-								</div>
-							{/if}
-
-							<!-- Collapsible Questions section -->
-							{#if agenda.questions.length > 0}
-								<div class="border border-gray-200 rounded-lg overflow-hidden">
-									<!-- Questions header - collapsible -->
-									<button
-										type="button"
-										onclick={() => toggleQuestions(agenda.id)}
-										class="w-full min-h-[48px] px-3 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors duration-150"
-									>
-										<div class="flex items-center gap-2">
-											{#if isQuestionsExpanded}
-												<svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-												</svg>
-											{:else}
-												<svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-												</svg>
-											{/if}
-											<span class="text-sm font-medium text-gray-700">
-												질문 체크리스트
-											</span>
-										</div>
-										<span class="text-xs font-medium px-2 py-1 rounded-full {answeredCount === agenda.questions.length ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}">
-											{answeredCount}/{agenda.questions.length}
-										</span>
-									</button>
-
-									<!-- Questions list -->
-									{#if isQuestionsExpanded}
-										<div class="p-3 space-y-3 border-t border-gray-200">
-											{#each agenda.questions as question (question.id)}
-												<label class="flex items-start gap-3 group cursor-pointer min-h-[44px] py-1">
-													<input
-														type="checkbox"
-														checked={question.answered}
-														onchange={() => handleQuestionToggle(question)}
-														class="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
-													/>
-													<span
-														class="text-sm text-gray-700 group-hover:text-gray-900 transition-colors duration-150 flex-1 leading-relaxed"
-														class:line-through={question.answered}
-														class:text-gray-400={question.answered}
-													>
-														{question.question}
-													</span>
-												</label>
-											{/each}
-										</div>
-									{/if}
-								</div>
-							{/if}
-
-							<!-- Notes textarea - larger for iPad -->
-							<div>
-								<label class="block text-sm font-medium text-gray-700 mb-2">메모</label>
-								<textarea
-									value={noteContent}
-									oninput={(e) => handleNoteInput(agenda.id, e)}
-									placeholder="안건별 메모를 입력하세요..."
-									rows="4"
-									class="w-full px-4 py-3 text-base text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-shadow duration-150"
-								></textarea>
-							</div>
-
-							<!-- Next agenda button (only for current agenda) -->
-							{#if isCurrent && index < agendas.length - 1}
-								<button
-									type="button"
-									onclick={() => handleNextAgenda(agenda.id)}
-									class="w-full min-h-[48px] px-4 py-3 text-base font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-								>
-									다음 안건으로 →
-								</button>
-							{/if}
-						</div>
+		<!-- Scrollable content area -->
+		<div class="flex-1 overflow-y-auto">
+			<div class="p-4 space-y-5">
+				<!-- Agenda Title -->
+				<div>
+					<h2 class="text-lg font-bold text-gray-900 leading-tight">
+						{currentAgenda.title}
+					</h2>
+					{#if currentAgenda.status === 'in_progress'}
+						<span class="inline-block mt-2 px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
+							진행중
+						</span>
+					{:else if currentAgenda.status === 'completed'}
+						<span class="inline-block mt-2 px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
+							완료
+						</span>
 					{/if}
 				</div>
-			{/each}
+
+				<!-- Description -->
+				{#if currentAgenda.description}
+					<div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+						<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+							상세 내용
+						</h3>
+						<p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+							{currentAgenda.description}
+						</p>
+					</div>
+				{/if}
+
+				<!-- Questions Checklist -->
+				{#if totalQuestions > 0}
+					<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+						<div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+							<h3 class="text-sm font-semibold text-gray-700">
+								질문 체크리스트
+							</h3>
+							<span class="text-xs font-medium px-2.5 py-1 rounded-full {answeredCount === totalQuestions ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}">
+								{answeredCount}/{totalQuestions}
+							</span>
+						</div>
+						<div class="p-3 space-y-1">
+							{#each currentAgenda.questions as question (question.id)}
+								<label class="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors min-h-[48px]">
+									<input
+										type="checkbox"
+										checked={question.answered}
+										onchange={() => handleQuestionToggle(question)}
+										class="mt-0.5 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer flex-shrink-0"
+									/>
+									<span
+										class="text-sm text-gray-700 leading-relaxed flex-1 {question.answered ? 'line-through text-gray-400' : ''}"
+									>
+										{question.question}
+									</span>
+								</label>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Memo -->
+				<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+					<div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+						<h3 class="text-sm font-semibold text-gray-700">
+							메모
+						</h3>
+					</div>
+					<div class="p-3">
+						<textarea
+							value={noteContent}
+							oninput={handleNoteInput}
+							placeholder="이 안건에 대한 메모를 입력하세요..."
+							rows="5"
+							class="w-full px-4 py-3 text-base text-gray-900 placeholder-gray-400 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-shadow duration-150"
+						></textarea>
+					</div>
+				</div>
+			</div>
 		</div>
-	</div>
+
+		<!-- Navigation Footer -->
+		<div class="border-t border-gray-200 bg-white p-4">
+			<div class="flex gap-3">
+				<button
+					type="button"
+					onclick={goToPrevAgenda}
+					disabled={currentAgendaIndex === 0}
+					class="flex-1 min-h-[52px] px-4 py-3 text-base font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2
+						{currentAgendaIndex === 0
+							? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+							: 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300'}"
+				>
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+					</svg>
+					이전
+				</button>
+				<button
+					type="button"
+					onclick={goToNextAgenda}
+					disabled={currentAgendaIndex === agendas.length - 1}
+					class="flex-1 min-h-[52px] px-4 py-3 text-base font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2
+						{currentAgendaIndex === agendas.length - 1
+							? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+							: 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'}"
+				>
+					다음
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+					</svg>
+				</button>
+			</div>
+		</div>
+	{:else}
+		<!-- No agenda state -->
+		<div class="flex-1 flex items-center justify-center text-gray-500">
+			<p>안건이 없습니다</p>
+		</div>
+	{/if}
 </div>
 
 <style>
-	/* iPad 11" optimization - ensure touch targets */
+	/* iPad optimization */
 	button, label {
 		-webkit-tap-highlight-color: transparent;
 	}
 
-	/* Smooth scrolling for touch */
 	.overflow-y-auto {
 		-webkit-overflow-scrolling: touch;
 	}
 
-	/* Prevent text selection on interactive elements */
 	button {
 		user-select: none;
 		-webkit-user-select: none;
+	}
+
+	/* Smooth transitions */
+	* {
+		-webkit-font-smoothing: antialiased;
 	}
 </style>

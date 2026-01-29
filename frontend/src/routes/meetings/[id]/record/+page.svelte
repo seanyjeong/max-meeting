@@ -378,7 +378,7 @@
 			<div class="w-1/4 min-w-64 max-w-80 border-r">
 				<AgendaNotePanel
 					agendas={meeting.agendas}
-					{currentAgendaIndex}
+					bind:currentAgendaIndex
 					notes={agendaNotes}
 					recordingTime={$recordingTime}
 					onNextAgenda={handleNextAgenda}
