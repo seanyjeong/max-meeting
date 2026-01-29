@@ -258,13 +258,13 @@
 			</div>
 		{:else}
 			{#each internalItems as item, index (item.id)}
-				{@render treeNode(item, internalItems, 0, index)}
+				{@render treeNode(item, internalItems, 0, index, `${index + 1}`)}
 			{/each}
 		{/if}
 	</div>
 </div>
 
-{#snippet treeNode(item: AgendaItem, parentList: AgendaItem[], depth: number, index: number)}
+{#snippet treeNode(item: AgendaItem, parentList: AgendaItem[], depth: number, index: number, numberPrefix: string)}
 	{@const children = getChildren(item)}
 	<div class="tree-item" style="--depth: {depth}">
 		<!-- Main Item -->
@@ -297,14 +297,14 @@
 					</div>
 				{/if}
 
-				<!-- Level Badge -->
-				{#if depth > 0}
-					<span
-						class="flex-shrink-0 px-2 py-0.5 text-xs font-bold rounded bg-blue-100 text-blue-600"
-					>
-						하위{depth}
-					</span>
-				{/if}
+				<!-- Number Badge -->
+				<span
+					class="flex-shrink-0 px-2 py-0.5 text-sm font-bold rounded {depth === 0
+						? 'bg-slate-700 text-white'
+						: 'bg-blue-100 text-blue-700'}"
+				>
+					{numberPrefix}.
+				</span>
 
 				<!-- Title Input -->
 				<input
@@ -407,7 +407,7 @@
 		{#if children.length > 0 && !collapsedItems.has(item.id)}
 			<div class="children-container ml-6 pl-4 border-l-2 border-blue-200">
 				{#each children as child, childIndex (child.id)}
-					{@render treeNode(child, children, depth + 1, childIndex)}
+					{@render treeNode(child, children, depth + 1, childIndex, `${numberPrefix}.${childIndex + 1}`)}
 				{/each}
 			</div>
 		{/if}
