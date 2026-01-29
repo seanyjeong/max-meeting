@@ -232,8 +232,8 @@
 						{getStatusLabel($currentMeeting.status)}
 					</span>
 				</div>
-				{#if $currentMeeting.type_name}
-					<p class="mt-1 text-sm text-gray-500">{$currentMeeting.type_name}</p>
+				{#if $currentMeeting.meeting_type?.name}
+					<p class="mt-1 text-sm text-gray-500">{$currentMeeting.meeting_type.name}</p>
 				{/if}
 			</div>
 
@@ -291,9 +291,9 @@
 				<div class="flex flex-wrap gap-2">
 					{#each $currentMeeting.attendees as attendee (attendee.id)}
 						<span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700">
-							{attendee.name}
-							{#if attendee.role}
-								<span class="ml-1 text-gray-500">({attendee.role})</span>
+							{attendee.contact?.name || '(알 수 없음)'}
+							{#if attendee.contact?.role}
+								<span class="ml-1 text-gray-500">({attendee.contact.role})</span>
 							{/if}
 						</span>
 					{/each}

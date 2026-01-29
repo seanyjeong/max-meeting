@@ -135,10 +135,10 @@
 							>
 								<div class="flex items-center justify-between">
 									<div>
-										<span class="font-medium text-gray-900">{attendee.name}</span>
-										{#if attendee.organization || attendee.role}
+										<span class="font-medium text-gray-900">{attendee.contact?.name || '(알 수 없음)'}</span>
+										{#if attendee.contact?.organization || attendee.contact?.role}
 											<p class="text-xs text-gray-500">
-												{attendee.organization || ''}{attendee.organization && attendee.role ? ' - ' : ''}{attendee.role || ''}
+												{attendee.contact?.organization || ''}{attendee.contact?.organization && attendee.contact?.role ? ' - ' : ''}{attendee.contact?.role || ''}
 											</p>
 										{/if}
 									</div>
