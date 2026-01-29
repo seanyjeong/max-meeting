@@ -392,22 +392,103 @@ npm run test             # Playwright E2E
 
 ## 알려진 이슈
 
-1. **a11y 경고 4개** - click 이벤트에 keyboard 핸들러 누락 (기능에 영향 없음)
+1. **a11y 경고** - click 이벤트에 keyboard 핸들러 누락 (기능에 영향 없음)
 2. **OpenAI 프로바이더 미구현** - Gemini만 지원
 3. **오프라인 동기화 미완성** - IndexedDB는 있으나 sync 로직 부분적
+4. **안건 계층 구조 미지원** - 현재 flat 구조, 하위 토픽 기능 개발 예정
+
+## 개발 예정 기능
+
+1. **안건 계층 구조** - 상위 안건 > 하위 토픽 구조
+   - DB: `parent_id` 컬럼 추가
+   - 드래그앤드롭으로 자유로운 이동
+   - LLM 파싱 시 계층 구조 인식
 
 ---
 
-## 배포 계획
+## 배포 (프로덕션)
 
-### Backend (ET 서버)
-- Docker Compose로 실행
-- Caddy 리버스 프록시
-- 도메인: `maxmeeting.etlab.kr` (예정)
+### 아키텍처
+```
+인터넷 → Caddy (ET서버) → meeting.etlab.kr
+                              ↓
+                     ┌────────┴────────┐
+                     ↓                 ↓
+              Frontend:3000      Backend:8000
+              (SvelteKit)        (FastAPI)
+                     ↓                 ↓
+                     └────────┬────────┘
+                              ↓
+                    ┌─────────┼─────────┐
+                    ↓         ↓         ↓
+               PostgreSQL   Redis    Celery Worker
+                 :5432      :6379    (STT 처리)
+```
 
-### Frontend (Vercel)
-- adapter-node → adapter-vercel 전환 필요
-- 또는 현재 adapter-node로 ET 서버에서 직접 호스팅
+### 도메인 및 URL
+- **프론트엔드**: `https://meeting.etlab.kr` → localhost:3000
+- **백엔드 API**: `https://meeting.etlab.kr/api/v1/*` → localhost:8000
+- **Caddy 설정**: `/etc/caddy/Caddyfile`
+
+### Docker Compose 구성
+```bash
+cd /home/et/max-ops/max-meeting/docker
+
+# 전체 시작
+docker compose up -d
+
+# 전체 중지
+docker compose down
+
+# 특정 서비스 재빌드 및 재시작
+docker compose build --no-cache frontend && docker compose up -d frontend
+docker compose build --no-cache app && docker compose up -d app
+
+# 로그 확인
+docker compose logs -f app          # 백엔드
+docker compose logs -f frontend     # 프론트엔드
+docker compose logs -f worker       # Celery 워커
+```
+
+### 컨테이너 상태
+| 컨테이너 | 내부 포트 | 외부 바인딩 | 역할 |
+|----------|-----------|-------------|------|
+| maxmeeting-frontend | 3000 | 127.0.0.1:3000 | SvelteKit (adapter-node) |
+| maxmeeting-app | 8000 | 127.0.0.1:8000 | FastAPI |
+| maxmeeting-worker | - | - | Celery (STT, LLM 처리) |
+| maxmeeting-db | 5432 | 127.0.0.1:5432 | PostgreSQL 16 |
+| maxmeeting-redis | 6379 | 127.0.0.1:6379 | Redis 7 |
+
+### Secrets 관리
+`docker/secrets/` 폴더에 다음 파일 필요:
+- `db_password.txt` - PostgreSQL 비밀번호
+- `redis_password.txt` - Redis 비밀번호
+- `jwt_secret.txt` - JWT 서명 키
+- `gemini_api_key.txt` - Google Gemini API 키
+- `huggingface_token.txt` - HuggingFace 토큰 (STT 모델용)
+
+### 환경변수
+`docker/.env` 파일:
+```bash
+DB_PASSWORD=xxx
+REDIS_PASSWORD=xxx
+JWT_SECRET=xxx
+SECRET_KEY=xxx
+STORAGE_PATH=/home/et/max-ops/max-meeting/data
+```
+
+### Caddy 설정 예시
+```caddyfile
+meeting.etlab.kr {
+    # Frontend
+    reverse_proxy localhost:3000
+
+    # Backend API
+    handle /api/* {
+        reverse_proxy localhost:8000
+    }
+}
+```
 
 ---
 
