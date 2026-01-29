@@ -54,6 +54,11 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
+	// Skip cross-origin requests (external APIs)
+	if (url.origin !== self.location.origin) {
+		return;
+	}
+
 	// Handle static assets with CacheFirst
 	if (STATIC_ASSETS.includes(url.pathname)) {
 		event.respondWith(cacheFirst(request));
