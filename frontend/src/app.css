@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	:root {
+		--bg-primary: 249 250 251;
+		--bg-secondary: 255 255 255;
+		--text-primary: 17 24 39;
+		--text-secondary: 107 114 128;
+	}
+
+	.dark {
+		--bg-primary: 17 24 39;
+		--bg-secondary: 31 41 55;
+		--text-primary: 249 250 251;
+		--text-secondary: 156 163 175;
+	}
+
+	body {
+		@apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-50;
+	}
+}
+
+@layer components {
+	.btn {
+		@apply px-4 py-2 rounded-lg font-medium transition-colors min-h-touch;
+	}
+
+	.btn-primary {
+		@apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500;
+	}
+
+	.btn-secondary {
+		@apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-2 focus:ring-offset-2 focus:ring-gray-500;
+	}
+
+	.btn-danger {
+		@apply bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-offset-2 focus:ring-red-500;
+	}
+
+	.input {
+		@apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-touch;
+	}
+
+	.card {
+		@apply bg-white rounded-lg shadow-sm p-6 dark:bg-gray-800;
+	}
+
+	.input-dark {
+		@apply dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400;
+	}
+
+	/* Recording indicator animation */
+	.recording-border {
+		animation: recording-pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes recording-pulse {
+		0%,
+		100% {
+			box-shadow: inset 0 0 0 3px rgb(239 68 68);
+		}
+		50% {
+			box-shadow: inset 0 0 0 5px rgb(239 68 68);
+		}
+	}
+}
+
+/* Focus visible for accessibility */
+@layer utilities {
+	.focus-visible-ring:focus-visible {
+		@apply outline-none ring-2 ring-primary-500 ring-offset-2;
+	}
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	::before,
+	::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* Enhanced focus indication for accessibility */
+:focus-visible {
+	outline: 2px solid theme('colors.primary.500');
+	outline-offset: 2px;
+}
+
+/* Screen reader only content */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}

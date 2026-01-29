@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+.svelte-kit/
+build/
+.DS_Store
+*.log
+
+# Environment
+.env
+.env.local
+
+# Docker secrets
+docker/secrets/*.txt
+!docker/secrets/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database
+*.db
+*.sqlite
+
+# Data
+/data/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backend specific
+backend/.env
+backend/.venv/
+
+# OMC state
+.omc/
+
+# Backups and data
+backups/
+data/uploads/
+data/audio/

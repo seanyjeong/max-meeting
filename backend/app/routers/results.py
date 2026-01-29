@@ -1,0 +1,217 @@
+"""Meeting result API endpoints."""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import get_current_user
+from app.database import get_db
+from app.schemas.result import (
+    ActionItemCreate,
+    ActionItemResponse,
+    ActionItemUpdate,
+    RegenerateRequest,
+    RegenerateResponse,
+    ResultCreate,
+    ResultDetailResponse,
+    ResultResponse,
+    ResultUpdate,
+    ResultVersionListResponse,
+)
+from app.services.result import ResultService
+
+
+router = APIRouter(tags=["results"])
+
+
+# ============================================
+# Meeting Results Endpoints
+# ============================================
+
+
+@router.get("/meetings/{meeting_id}/results", response_model=ResultVersionListResponse)
+async def list_results(
+    meeting_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Get all result versions for a meeting."""
+    service = ResultService(db)
+    try:
+        results = await service.list_results(meeting_id)
+        return ResultVersionListResponse(
+            data=[ResultResponse.model_validate(r) for r in results],
+            meta={"total": len(results)},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/meetings/{meeting_id}/results",
+    response_model=ResultResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_result(
+    meeting_id: int,
+    data: ResultCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Create a new result version."""
+    service = ResultService(db)
+    try:
+        result = await service.create_result(meeting_id, data)
+        return ResultResponse.model_validate(result)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ============================================
+# Result by ID Endpoints
+# ============================================
+
+
+@router.get("/results/{result_id}", response_model=ResultDetailResponse)
+async def get_result(
+    result_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Get a specific result with decisions and action items."""
+    service = ResultService(db)
+    try:
+        data = await service.get_result_with_relations(result_id)
+        response = ResultDetailResponse.model_validate(data["result"])
+        response.decisions = data["decisions"]
+        response.action_items = data["action_items"]
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.patch("/results/{result_id}", response_model=ResultResponse)
+async def update_result(
+    result_id: int,
+    data: ResultUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Update a result (summary, key_points)."""
+    service = ResultService(db)
+    try:
+        result = await service.update_result(result_id, data)
+        return ResultResponse.model_validate(result)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/results/{result_id}/verify", response_model=ResultResponse)
+async def verify_result(
+    result_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Mark a result as verified."""
+    service = ResultService(db)
+    try:
+        result = await service.verify_result(result_id)
+        return ResultResponse.model_validate(result)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/results/{result_id}/regenerate", response_model=RegenerateResponse)
+async def regenerate_result(
+    result_id: int,
+    data: RegenerateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Trigger LLM regeneration of the meeting result."""
+    from workers.tasks.llm import generate_meeting_result
+
+    service = ResultService(db)
+    try:
+        # Verify result exists
+        result = await service.get_result(result_id)
+
+        # Trigger Celery task for LLM regeneration
+        task = generate_meeting_result.delay(meeting_id=result.meeting_id)
+
+        return RegenerateResponse(task_id=task.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ============================================
+# Action Items Endpoints
+# ============================================
+
+
+@router.get("/meetings/{meeting_id}/action-items", response_model=list[ActionItemResponse])
+async def list_action_items(
+    meeting_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """List all action items for a meeting."""
+    service = ResultService(db)
+    try:
+        items = await service.list_action_items(meeting_id)
+        return [ActionItemResponse.model_validate(item) for item in items]
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/results/{result_id}/action-items",
+    response_model=ActionItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_action_item(
+    result_id: int,
+    data: ActionItemCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Add an action item to a result."""
+    service = ResultService(db)
+    try:
+        # Get the result to find meeting_id
+        result = await service.get_result(result_id)
+        item = await service.create_action_item(result.meeting_id, data)
+        return ActionItemResponse.model_validate(item)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.patch("/action-items/{action_item_id}", response_model=ActionItemResponse)
+async def update_action_item(
+    action_item_id: int,
+    data: ActionItemUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Update an action item."""
+    service = ResultService(db)
+    try:
+        item = await service.update_action_item(action_item_id, data)
+        return ActionItemResponse.model_validate(item)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/action-items/{action_item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_action_item(
+    action_item_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Delete an action item."""
+    service = ResultService(db)
+    try:
+        await service.delete_action_item(action_item_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

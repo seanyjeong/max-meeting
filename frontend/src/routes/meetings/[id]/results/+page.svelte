@@ -1,0 +1,484 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { Breadcrumb, Button, Card, LoadingSpinner, Badge } from '$lib/components';
+	import SummaryEditor from '$lib/components/results/SummaryEditor.svelte';
+	import ActionItems from '$lib/components/results/ActionItems.svelte';
+	import TranscriptViewer from '$lib/components/results/TranscriptViewer.svelte';
+	import SpeakerMapper from '$lib/components/results/SpeakerMapper.svelte';
+	import { currentMeeting, isLoading } from '$lib/stores/meeting';
+	import { resultsStore, hasResult, isVerified } from '$lib/stores/results';
+	import { api } from '$lib/api';
+	import type { MeetingDetail } from '$lib/stores/meeting';
+
+	let meetingId = $derived(parseInt($page.params.id ?? '0'));
+	let activeTab = $state<'summary' | 'actions' | 'transcript'>('summary');
+	let speakerMapping = $state<Record<string, number>>({});
+
+	// Extract unique speakers from transcript
+	let uniqueSpeakers = $derived(
+		Array.from(
+			new Set(
+				$resultsStore.transcriptSegments
+					.map((segment) => segment.speaker_label)
+					.filter((label): label is string => label !== null && label !== undefined)
+			)
+		).sort()
+	);
+
+	// Breadcrumb items
+	let breadcrumbItems = $derived([
+		{ label: '홈', href: '/' },
+		{ label: '회의', href: '/meetings' },
+		{
+			label: $currentMeeting?.title || '회의',
+			href: `/meetings/${meetingId}`
+		},
+		{ label: '결과' }
+	]);
+
+	onMount(async () => {
+		// Load meeting if not already loaded
+		if (!$currentMeeting || $currentMeeting.id !== meetingId) {
+			$isLoading = true;
+			try {
+				const response = await api.get<MeetingDetail>(`/meetings/${meetingId}`);
+				$currentMeeting = response;
+			} catch (error) {
+				console.error('Failed to load meeting:', error);
+				goto('/meetings');
+				return;
+			} finally {
+				$isLoading = false;
+			}
+		}
+
+		// Load results
+		await resultsStore.loadResult(meetingId);
+		await resultsStore.loadTranscript(meetingId);
+	});
+
+	async function handleGenerate() {
+		await resultsStore.generateResult(meetingId);
+	}
+
+	async function handleRegenerate() {
+		if (confirm('회의 결과의 새 버전을 생성합니다. 계속하시겠습니까?')) {
+			await resultsStore.regenerateResult(meetingId);
+		}
+	}
+
+	async function handleVerify() {
+		if (confirm('이 회의 결과를 검증 완료로 표시하시겠습니까? 내용이 검토되고 승인되었음을 나타냅니다.')) {
+			await resultsStore.verifyResult(meetingId);
+		}
+	}
+
+	function handleEdit() {
+		goto(`/meetings/${meetingId}/results/edit`);
+	}
+
+	function formatDate(dateStr: string | null): string {
+		if (!dateStr) return '';
+		return new Date(dateStr).toLocaleString('ko-KR', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
+	}
+</script>
+
+<svelte:head>
+	<title>결과 - {$currentMeeting?.title || '회의'} | MAX Meeting</title>
+</svelte:head>
+
+<div class="results-page">
+	{#if $isLoading || $resultsStore.isLoading}
+		<div class="loading-container">
+			<LoadingSpinner />
+			<p>결과 로딩 중...</p>
+		</div>
+	{:else}
+		<!-- Header -->
+		<header class="page-header">
+			<div class="header-left">
+				<Breadcrumb items={breadcrumbItems} />
+			</div>
+
+			<div class="header-actions">
+				{#if $isVerified}
+					<Badge variant="green">검증 완료</Badge>
+				{/if}
+
+				{#if $hasResult}
+					<Button variant="secondary" size="sm" onclick={handleRegenerate} loading={$resultsStore.isGenerating}>
+						{#snippet children()}
+							<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+							</svg>
+							재생성
+						{/snippet}
+					</Button>
+
+					<Button variant="secondary" size="sm" onclick={handleEdit}>
+						{#snippet children()}
+							<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+							</svg>
+							수정
+						{/snippet}
+					</Button>
+
+					{#if !$isVerified}
+						<Button variant="primary" size="sm" onclick={handleVerify}>
+							{#snippet children()}
+								<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+								</svg>
+								검증
+							{/snippet}
+						</Button>
+					{/if}
+				{:else}
+					<Button variant="primary" size="sm" onclick={handleGenerate} loading={$resultsStore.isGenerating}>
+						{#snippet children()}
+							<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+							</svg>
+							결과 생성
+						{/snippet}
+					</Button>
+				{/if}
+			</div>
+		</header>
+
+		<!-- Error message -->
+		{#if $resultsStore.error}
+			<div class="error-banner">
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+				</svg>
+				<span>{$resultsStore.error}</span>
+				<button type="button" onclick={() => resultsStore.clearError()} aria-label="Dismiss error">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+		{/if}
+
+		<!-- Generating indicator -->
+		{#if $resultsStore.isGenerating}
+			<div class="generating-banner">
+				<LoadingSpinner />
+				<span>회의 결과 생성 중... 잠시 기다려 주세요.</span>
+			</div>
+		{/if}
+
+		<!-- Main Content -->
+		<main class="results-content">
+			{#if $hasResult}
+				<!-- Tabs -->
+				<div class="tabs" role="tablist">
+					<button
+						type="button"
+						class="tab"
+						class:active={activeTab === 'summary'}
+						role="tab"
+						aria-selected={activeTab === 'summary'}
+						onclick={() => activeTab = 'summary'}
+					>
+						요약
+					</button>
+					<button
+						type="button"
+						class="tab"
+						class:active={activeTab === 'actions'}
+						role="tab"
+						aria-selected={activeTab === 'actions'}
+						onclick={() => activeTab = 'actions'}
+					>
+						실행 항목
+						{#if $resultsStore.actionItems.length > 0}
+							<span class="tab-badge">{$resultsStore.actionItems.length}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="tab"
+						class:active={activeTab === 'transcript'}
+						role="tab"
+						aria-selected={activeTab === 'transcript'}
+						onclick={() => activeTab = 'transcript'}
+					>
+						전사록
+					</button>
+				</div>
+
+				<!-- Tab Content -->
+				<div class="tab-content">
+					{#if activeTab === 'summary'}
+						<Card>
+							{#snippet children()}
+								<div class="summary-header">
+									<h2>회의 요약</h2>
+									{#if $resultsStore.currentResult}
+										<div class="summary-meta">
+											<span>버전 {$resultsStore.currentResult.version}</span>
+											<span>업데이트 {formatDate($resultsStore.currentResult.updated_at)}</span>
+										</div>
+									{/if}
+								</div>
+
+								<!-- Version selector -->
+								{#if $resultsStore.versions.length > 1}
+									<div class="version-selector">
+										<label for="version-select">버전:</label>
+										<select
+											id="version-select"
+											value={$resultsStore.selectedVersion}
+											onchange={(e) => {
+												const version = parseInt((e.target as HTMLSelectElement).value);
+												resultsStore.loadVersion(meetingId, version);
+											}}
+										>
+											{#each $resultsStore.versions as version}
+												<option value={version.version}>
+													v{version.version} - {formatDate(version.created_at)}
+												</option>
+											{/each}
+										</select>
+									</div>
+								{/if}
+
+								<SummaryEditor readonly />
+							{/snippet}
+						</Card>
+					{:else if activeTab === 'actions'}
+						<ActionItems {meetingId} readonly />
+					{:else if activeTab === 'transcript'}
+						<!-- Speaker Mapper -->
+						{#if uniqueSpeakers.length > 0 && $currentMeeting && $currentMeeting.attendees && $currentMeeting.attendees.length > 0}
+							<div class="mb-4">
+								<SpeakerMapper
+									speakers={uniqueSpeakers}
+									attendees={$currentMeeting.attendees}
+									bind:mapping={speakerMapping}
+								/>
+							</div>
+						{/if}
+
+						<!-- Transcript Viewer -->
+						<TranscriptViewer />
+					{/if}
+				</div>
+			{:else}
+				<!-- No results state -->
+				<Card>
+					{#snippet children()}
+						<div class="empty-state">
+							<svg class="w-16 h-16 mx-auto text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+							</svg>
+							<h3>아직 결과가 없습니다</h3>
+							<p>회의 결과는 녹음과 노트로부터 생성됩니다.</p>
+							<p class="text-sm text-gray-500">결과를 생성하기 전에 녹음이 처리되었는지 확인하세요.</p>
+							<Button variant="primary" onclick={handleGenerate} loading={$resultsStore.isGenerating}>
+								{#snippet children()}결과 생성{/snippet}
+							</Button>
+						</div>
+					{/snippet}
+				</Card>
+			{/if}
+		</main>
+	{/if}
+</div>
+
+<style>
+	.results-page {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.loading-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		min-height: 300px;
+		gap: 1rem;
+		color: #6b7280;
+	}
+
+	.page-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 1rem;
+	}
+
+	.header-left {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.error-banner,
+	.generating-banner {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.5rem;
+	}
+
+	.error-banner {
+		background: #fef2f2;
+		color: #dc2626;
+	}
+
+	.error-banner button {
+		margin-left: auto;
+		padding: 0.25rem;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+	}
+
+	.generating-banner {
+		background: #eff6ff;
+		color: #1d4ed8;
+	}
+
+	.results-content {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.tabs {
+		display: flex;
+		gap: 0.25rem;
+		border-bottom: 1px solid #e5e7eb;
+	}
+
+	.tab {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.75rem 1rem;
+		border: none;
+		background: transparent;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #6b7280;
+		cursor: pointer;
+		border-bottom: 2px solid transparent;
+		transition: all 0.15s;
+	}
+
+	.tab:hover {
+		color: #374151;
+	}
+
+	.tab.active {
+		color: #1d4ed8;
+		border-bottom-color: #1d4ed8;
+	}
+
+	.tab-badge {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 0.375rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		background: #e5e7eb;
+		border-radius: 9999px;
+	}
+
+	.tab.active .tab-badge {
+		background: #dbeafe;
+		color: #1d4ed8;
+	}
+
+	.tab-content {
+		min-height: 400px;
+	}
+
+	.summary-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 1rem;
+	}
+
+	.summary-header h2 {
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: #111827;
+		margin: 0;
+	}
+
+	.summary-meta {
+		display: flex;
+		gap: 0.75rem;
+		font-size: 0.75rem;
+		color: #6b7280;
+	}
+
+	.version-selector {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid #e5e7eb;
+	}
+
+	.version-selector label {
+		font-size: 0.875rem;
+		color: #6b7280;
+	}
+
+	.version-selector select {
+		padding: 0.375rem 0.5rem;
+		border: 1px solid #d1d5db;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+	}
+
+	.empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding: 3rem 1rem;
+		text-align: center;
+	}
+
+	.empty-state h3 {
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: #111827;
+		margin: 0;
+	}
+
+	.empty-state p {
+		color: #6b7280;
+		margin: 0;
+	}
+</style>

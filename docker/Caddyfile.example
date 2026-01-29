@@ -1,0 +1,67 @@
+# Caddyfile for MAX Meeting
+# Copy this to /etc/caddy/Caddyfile and adjust as needed
+
+meeting.etlab.kr {
+    # Enable compression
+    encode gzip zstd
+
+    # Frontend
+    @frontend {
+        not path /api/* /ws/*
+    }
+    handle @frontend {
+        reverse_proxy localhost:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # API Backend
+    handle /api/* {
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+
+            # SSE support
+            flush_interval -1
+        }
+    }
+
+    # WebSocket support for real-time updates
+    handle /ws/* {
+        reverse_proxy localhost:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up Upgrade {header.Upgrade}
+            header_up Connection "upgrade"
+        }
+    }
+
+    # Security headers
+    header {
+        # HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Content Security Policy
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss: https:; media-src 'self' blob:; object-src 'none'; frame-ancestors 'self';"
+        # Remove server header
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/meeting.etlab.kr.log
+        format json
+    }
+}

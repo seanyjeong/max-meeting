@@ -1,0 +1,459 @@
+"""
+LLM Celery tasks for generating meeting summaries and questions.
+
+Handles AI-powered meeting result generation.
+Based on spec Section 5 (Phase 5: Meeting Results) and Section 9 (LLM Prompts).
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+import redis
+from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
+
+from app.config import get_settings
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+def get_redis_client() -> redis.Redis:
+    """Get a Redis client for progress updates."""
+    return redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+def publish_progress(
+    meeting_id: int,
+    progress: int,
+    status: str,
+    message: str = "",
+) -> None:
+    """Publish progress update via Redis Pub/Sub."""
+    try:
+        r = get_redis_client()
+        channel = f"llm:progress:{meeting_id}"
+        data = {
+            "meeting_id": meeting_id,
+            "progress": progress,
+            "status": status,
+            "message": message,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        r.publish(channel, str(data))
+
+        # Also store the last status for SSE reconnection
+        r.setex(f"llm:last_status:{meeting_id}", 3600, str(data))
+
+    except Exception as e:
+        logger.warning(f"Failed to publish progress: {e}")
+
+
+@shared_task(
+    bind=True,
+    name="workers.tasks.llm.generate_meeting_result",
+    max_retries=2,
+    default_retry_delay=30,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=300,  # 5 minutes
+    time_limit=360,
+)
+def generate_meeting_result(
+    self,
+    meeting_id: int,
+) -> dict[str, Any]:
+    """
+    Generate meeting result using LLM.
+
+    Gathers all transcripts, notes, and sketches for the meeting,
+    then uses LLM to generate a summary, discussions, decisions,
+    and action items.
+
+    Args:
+        meeting_id: ID of the meeting to process
+
+    Returns:
+        Dict with generated result IDs and content summary
+    """
+    logger.info(f"Starting LLM result generation for meeting {meeting_id}")
+
+    async def _generate():
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from sqlalchemy.orm import selectinload
+
+        from app.models import (
+            ActionItem,
+            ActionItemPriority,
+            Agenda,
+            AgendaDiscussion,
+            DecisionType,
+            Meeting,
+            MeetingDecision,
+            MeetingResult,
+            TaskStatusEnum,
+            TaskTracking,
+        )
+        from app.services.llm import get_llm_service
+
+        engine = create_async_engine(settings.ASYNC_DATABASE_URL)
+        async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+        async with async_session() as session:
+            # Create task tracking
+            task = TaskTracking(
+                task_id=self.request.id,
+                task_type="llm_result",
+                meeting_id=meeting_id,
+                status=TaskStatusEnum.PROCESSING,
+                started_at=datetime.now(timezone.utc),
+            )
+            session.add(task)
+            await session.commit()
+
+            publish_progress(
+                meeting_id=meeting_id,
+                progress=5,
+                status="processing",
+                message="Gathering meeting data",
+            )
+
+            # Load meeting with all related data
+            result = await session.execute(
+                select(Meeting)
+                .options(
+                    selectinload(Meeting.agendas).selectinload(Agenda.questions),
+                    selectinload(Meeting.attendees),
+                    selectinload(Meeting.transcripts),
+                    selectinload(Meeting.manual_notes),
+                    selectinload(Meeting.sketches),
+                )
+                .where(Meeting.id == meeting_id)
+            )
+            meeting = result.scalar_one_or_none()
+
+            if not meeting:
+                raise ValueError(f"Meeting {meeting_id} not found")
+
+            publish_progress(
+                meeting_id=meeting_id,
+                progress=15,
+                status="processing",
+                message="Preparing transcript data",
+            )
+
+            # Gather transcripts
+            transcript_texts = []
+            for transcript in meeting.transcripts:
+                if transcript.segments:
+                    for segment in transcript.segments:
+                        text = segment.get("text", "")
+                        if text:
+                            transcript_texts.append(text)
+
+            full_transcript = " ".join(transcript_texts)
+
+            if not full_transcript:
+                logger.warning(f"No transcript text found for meeting {meeting_id}")
+
+            # Gather manual notes
+            notes_texts = [note.content for note in meeting.manual_notes if note.content]
+            notes_combined = "\n".join(notes_texts) if notes_texts else None
+
+            # Gather sketch texts
+            sketch_texts = [
+                sketch.extracted_text
+                for sketch in meeting.sketches
+                if sketch.extracted_text
+            ]
+            sketches_combined = "\n".join(sketch_texts) if sketch_texts else None
+
+            # Prepare agenda titles
+            agenda_titles = [agenda.title for agenda in meeting.agendas]
+
+            # Prepare meeting info
+            attendee_names = []
+            for attendee in meeting.attendees:
+                if attendee.contact:
+                    attendee_names.append(attendee.contact.name)
+
+            meeting_info = {
+                "title": meeting.title,
+                "scheduled_at": meeting.scheduled_at.isoformat() if meeting.scheduled_at else None,
+                "attendees": attendee_names,
+            }
+
+            publish_progress(
+                meeting_id=meeting_id,
+                progress=30,
+                status="generating",
+                message="Generating meeting summary with AI",
+            )
+
+            # Call LLM service
+            llm_service = get_llm_service()
+            llm_result = await llm_service.generate_meeting_summary(
+                transcript=full_transcript,
+                agenda_titles=agenda_titles,
+                meeting_info=meeting_info,
+                notes=notes_combined,
+                sketch_texts=sketches_combined,
+            )
+
+            publish_progress(
+                meeting_id=meeting_id,
+                progress=70,
+                status="saving",
+                message="Saving results to database",
+            )
+
+            # Get the latest version number
+            version_result = await session.execute(
+                select(MeetingResult)
+                .where(MeetingResult.meeting_id == meeting_id)
+                .order_by(MeetingResult.version.desc())
+                .limit(1)
+            )
+            latest_result = version_result.scalar_one_or_none()
+            new_version = (latest_result.version + 1) if latest_result else 1
+
+            # Create meeting result
+            meeting_result = MeetingResult(
+                meeting_id=meeting_id,
+                summary=llm_result["summary"],
+                version=new_version,
+            )
+            session.add(meeting_result)
+
+            # Create agenda discussions
+            for discussion in llm_result["discussions"]:
+                agenda_idx = discussion.get("agenda_idx", 0)
+                if agenda_idx < len(meeting.agendas):
+                    agenda_disc = AgendaDiscussion(
+                        agenda_id=meeting.agendas[agenda_idx].id,
+                        content=discussion["content"],
+                        is_llm_generated=True,
+                        version=new_version,
+                    )
+                    session.add(agenda_disc)
+
+            # Create decisions
+            for decision in llm_result["decisions"]:
+                agenda_idx = decision.get("agenda_idx", 0)
+                agenda_id = meeting.agendas[agenda_idx].id if agenda_idx < len(meeting.agendas) else None
+
+                decision_type = decision.get("type", "approved")
+                try:
+                    decision_enum = DecisionType(decision_type)
+                except ValueError:
+                    decision_enum = DecisionType.APPROVED
+
+                meeting_decision = MeetingDecision(
+                    meeting_id=meeting_id,
+                    agenda_id=agenda_id,
+                    content=decision["content"],
+                    decision_type=decision_enum,
+                )
+                session.add(meeting_decision)
+
+            # Create action items
+            for item in llm_result["action_items"]:
+                agenda_idx = item.get("agenda_idx", 0)
+                agenda_id = meeting.agendas[agenda_idx].id if agenda_idx < len(meeting.agendas) else None
+
+                # Parse due date if provided
+                due_date = None
+                if item.get("due_date"):
+                    try:
+                        from datetime import date
+                        due_date = date.fromisoformat(item["due_date"])
+                    except (ValueError, TypeError):
+                        pass
+
+                action_item = ActionItem(
+                    meeting_id=meeting_id,
+                    agenda_id=agenda_id,
+                    content=item["content"],
+                    due_date=due_date,
+                    priority=ActionItemPriority.MEDIUM,
+                )
+                session.add(action_item)
+
+            # Update task tracking
+            task.status = TaskStatusEnum.COMPLETED
+            task.completed_at = datetime.now(timezone.utc)
+            task.progress = 100
+            task.result = {
+                "version": new_version,
+                "num_discussions": len(llm_result["discussions"]),
+                "num_decisions": len(llm_result["decisions"]),
+                "num_action_items": len(llm_result["action_items"]),
+            }
+
+            await session.commit()
+            await session.refresh(meeting_result)
+
+            publish_progress(
+                meeting_id=meeting_id,
+                progress=100,
+                status="completed",
+                message="Meeting result generated successfully",
+            )
+
+            return {
+                "meeting_id": meeting_id,
+                "result_id": meeting_result.id,
+                "version": new_version,
+                "summary_preview": llm_result["summary"][:200] + "..."
+                if len(llm_result["summary"]) > 200
+                else llm_result["summary"],
+                "num_discussions": len(llm_result["discussions"]),
+                "num_decisions": len(llm_result["decisions"]),
+                "num_action_items": len(llm_result["action_items"]),
+                "status": "completed",
+            }
+
+    try:
+        return asyncio.get_event_loop().run_until_complete(_generate())
+
+    except SoftTimeLimitExceeded:
+        logger.error(f"LLM generation timed out for meeting {meeting_id}")
+        publish_progress(
+            meeting_id=meeting_id,
+            progress=0,
+            status="failed",
+            message="Generation timed out",
+        )
+        raise
+
+    except Exception as e:
+        logger.error(f"LLM generation failed for meeting {meeting_id}: {e}")
+        publish_progress(
+            meeting_id=meeting_id,
+            progress=0,
+            status="failed",
+            message=str(e),
+        )
+        raise
+
+
+@shared_task(
+    bind=True,
+    name="workers.tasks.llm.generate_questions",
+    max_retries=3,
+    default_retry_delay=10,
+    acks_late=True,
+    soft_time_limit=60,
+    time_limit=90,
+)
+def generate_questions(
+    self,
+    agenda_id: int,
+    num_questions: int = 4,
+) -> dict[str, Any]:
+    """
+    Generate discussion questions for an agenda item.
+
+    Args:
+        agenda_id: ID of the agenda item
+        num_questions: Number of questions to generate
+
+    Returns:
+        Dict with generated question IDs and content
+    """
+    logger.info(f"Generating questions for agenda {agenda_id}")
+
+    async def _generate():
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+        from app.models import Agenda, AgendaQuestion
+        from app.services.llm import get_llm_service
+
+        engine = create_async_engine(settings.ASYNC_DATABASE_URL)
+        async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+        async with async_session() as session:
+            # Get agenda
+            result = await session.execute(
+                select(Agenda).where(Agenda.id == agenda_id)
+            )
+            agenda = result.scalar_one_or_none()
+
+            if not agenda:
+                raise ValueError(f"Agenda {agenda_id} not found")
+
+            # Generate questions using LLM
+            llm_service = get_llm_service()
+            questions = await llm_service.generate_questions(
+                agenda_title=agenda.title,
+                agenda_description=agenda.description,
+                num_questions=num_questions,
+            )
+
+            # Delete existing generated questions
+            existing = await session.execute(
+                select(AgendaQuestion)
+                .where(AgendaQuestion.agenda_id == agenda_id)
+                .where(AgendaQuestion.is_generated == True)  # noqa: E712
+            )
+            for q in existing.scalars().all():
+                await session.delete(q)
+
+            # Create new questions
+            created_ids = []
+            for i, question_text in enumerate(questions):
+                question = AgendaQuestion(
+                    agenda_id=agenda_id,
+                    question=question_text,
+                    order_num=i,
+                    is_generated=True,
+                    answered=False,
+                )
+                session.add(question)
+                await session.flush()
+                created_ids.append(question.id)
+
+            await session.commit()
+
+            return {
+                "agenda_id": agenda_id,
+                "questions": questions,
+                "question_ids": created_ids,
+                "num_questions": len(questions),
+                "status": "completed",
+            }
+
+    try:
+        return asyncio.get_event_loop().run_until_complete(_generate())
+
+    except Exception as e:
+        logger.error(f"Question generation failed for agenda {agenda_id}: {e}")
+        raise
+
+
+@shared_task(
+    bind=True,
+    name="workers.tasks.llm.regenerate_meeting_result",
+    acks_late=True,
+)
+def regenerate_meeting_result(
+    self,
+    meeting_id: int,
+) -> dict[str, Any]:
+    """
+    Regenerate meeting result (creates a new version).
+
+    Args:
+        meeting_id: ID of the meeting
+
+    Returns:
+        Dict with new result info
+    """
+    logger.info(f"Regenerating result for meeting {meeting_id}")
+
+    # Simply trigger a new generation (it will create a new version)
+    return generate_meeting_result.delay(meeting_id).id
