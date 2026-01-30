@@ -17,29 +17,29 @@
 		organization: string | null;
 	}
 
-	let meetingTypes: MeetingType[] = [];
-	let contacts: Contact[] = [];
-	let isLoading = false;
-	let isSaving = false;
-	let error = '';
-	let showNewTypeModal = false;
-	let newTypeName = '';
-	let isCreatingType = false;
+	let meetingTypes = $state<MeetingType[]>([]);
+	let contacts = $state<Contact[]>([]);
+	let isLoading = $state(false);
+	let isSaving = $state(false);
+	let error = $state('');
+	let showNewTypeModal = $state(false);
+	let newTypeName = $state('');
+	let isCreatingType = $state(false);
 
 	// Attendee autocomplete state
-	let searchQuery = '';
-	let contactSuggestions: Contact[] = [];
-	let isSearching = false;
-	let showSuggestions = false;
+	let searchQuery = $state('');
+	let contactSuggestions = $state<Contact[]>([]);
+	let isSearching = $state(false);
+	let showSuggestions = $state(false);
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-	let selectedContacts: Contact[] = [];
+	let selectedContacts = $state<Contact[]>([]);
 
 	// Form fields
-	let title = '';
-	let typeId: number | null = null;
-	let scheduledAt = '';
-	let location = '';
-	let selectedAttendees: number[] = [];
+	let title = $state('');
+	let typeId = $state<number | null>(null);
+	let scheduledAt = $state('');
+	let location = $state('');
+	let selectedAttendees = $state<number[]>([]);
 
 	// Agenda fields
 	interface QuestionInput {
@@ -55,13 +55,13 @@
 		questions: QuestionInput[];
 		children?: AgendaInput[];
 	}
-	let agendas: AgendaInput[] = [{ id: crypto.randomUUID(), title: '', description: '', questions: [], children: [] }];
-	let agendaTextInput = '';
-	let isParsing = false;
-	let generatingQuestionsFor: string | null = null;
+	let agendas = $state<AgendaInput[]>([{ id: crypto.randomUUID(), title: '', description: '', questions: [], children: [] }]);
+	let agendaTextInput = $state('');
+	let isParsing = $state(false);
+	let generatingQuestionsFor = $state<string | null>(null);
 	let parseDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-	let isAutoPreviewEnabled = true;
-	let showAgendaEditor = false;
+	let isAutoPreviewEnabled = $state(true);
+	let showAgendaEditor = $state(false);
 
 	// Memoized editor items to prevent infinite loop
 	let editorItems = $derived(agendas.map(agendaToEditorItem));
