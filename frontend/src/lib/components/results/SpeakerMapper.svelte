@@ -1,12 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
-
-	interface Attendee {
-		id: number;
-		name: string;
-		role?: string | null;
-		organization?: string | null;
-	}
+	import type { Attendee } from '$lib/stores/meeting';
 
 	export let speakers: string[] = []; // ["SPEAKER_00", "SPEAKER_01"]
 	export let attendees: Attendee[] = [];
@@ -43,7 +37,7 @@
 	function getMappedAttendeeName(speaker: string): string | undefined {
 		const attendeeId = mapping[speaker];
 		if (!attendeeId) return undefined;
-		return attendees.find((a) => a.id === attendeeId)?.name;
+		return attendees.find((a) => a.id === attendeeId)?.contact?.name;
 	}
 
 	function getUnmappedAttendees(): Attendee[] {
@@ -166,7 +160,7 @@
 							<span class="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
 								<span class="font-medium">{speaker.replace('SPEAKER_', 'S')}</span>
 								<span class="text-gray-400">=</span>
-								<span>{attendee.name}</span>
+								<span>{attendee.contact?.name || '(알 수 없음)'}</span>
 							</span>
 						{/if}
 					{/each}

@@ -7,14 +7,92 @@
 	import ActionItems from '$lib/components/results/ActionItems.svelte';
 	import TranscriptViewer from '$lib/components/results/TranscriptViewer.svelte';
 	import SpeakerMapper from '$lib/components/results/SpeakerMapper.svelte';
+	import { Tabs, Skeleton, KeyboardShortcuts, EmptyState } from '$lib/components/ui';
 	import { currentMeeting, isLoading } from '$lib/stores/meeting';
 	import { resultsStore, hasResult, isVerified } from '$lib/stores/results';
+	import { toast } from '$lib/stores/toast';
 	import { api } from '$lib/api';
+	import { exportToPdf, copyToClipboard } from '$lib/utils/exportPdf';
+	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio } from 'lucide-svelte';
 	import type { MeetingDetail } from '$lib/stores/meeting';
 
 	let meetingId = $derived(parseInt($page.params.id ?? '0'));
 	let activeTab = $state<'summary' | 'actions' | 'transcript'>('summary');
 	let speakerMapping = $state<Record<string, number>>({});
+	let showShortcutsHelp = $state(false);
+
+	// Tab configuration
+	const tabConfig = $derived([
+		{ id: 'summary', label: '요약', icon: FileText },
+		{ id: 'actions', label: '실행 항목', icon: ListTodo, badge: $resultsStore.actionItems.length || undefined },
+		{ id: 'transcript', label: '전사록', icon: FileAudio }
+	]);
+
+	// Keyboard shortcuts (typed for KeyboardShortcuts component)
+	const shortcuts: Array<{
+		key: string;
+		modifiers?: ('ctrl' | 'alt' | 'shift' | 'meta')[];
+		description: string;
+		action: () => void;
+		category?: string;
+	}> = [
+		{ key: '1', description: '요약 탭', action: () => { activeTab = 'summary' }, category: '탭 전환' },
+		{ key: '2', description: '실행 항목 탭', action: () => { activeTab = 'actions' }, category: '탭 전환' },
+		{ key: '3', description: '전사록 탭', action: () => { activeTab = 'transcript' }, category: '탭 전환' },
+		{ key: 'p', modifiers: ['ctrl'], description: 'PDF 내보내기', action: () => { handleExportPdf() }, category: '내보내기' },
+		{ key: 'c', modifiers: ['ctrl', 'shift'], description: '클립보드에 복사', action: () => { handleCopyToClipboard() }, category: '내보내기' },
+		{ key: 'e', description: '수정 모드', action: () => { handleEdit() }, category: '편집' },
+		{ key: 'r', description: '재생성', action: () => { handleRegenerate() }, category: '편집' }
+	];
+
+	// PDF export handler
+	async function handleExportPdf() {
+		if (!$currentMeeting || !$hasResult) return;
+
+		exportToPdf({
+			title: $currentMeeting.title,
+			date: $currentMeeting.scheduled_at ? new Date($currentMeeting.scheduled_at).toLocaleDateString('ko-KR') : undefined,
+			location: $currentMeeting.location || undefined,
+			attendees: $currentMeeting.attendees?.map(a => ({
+				name: a.contact?.name || '알 수 없음',
+				role: a.contact?.role || undefined
+			})),
+			summary: $resultsStore.currentResult?.summary,
+			actionItems: $resultsStore.actionItems.map(item => ({
+				content: item.content,
+				assignee: item.assignee_name,
+				dueDate: item.due_date ? new Date(item.due_date).toLocaleDateString('ko-KR') : undefined,
+				priority: item.priority,
+				status: item.status
+			})),
+			transcriptSegments: $resultsStore.transcriptSegments.map(seg => ({
+				speaker: seg.speaker_name || seg.speaker_label || undefined,
+				text: seg.text,
+				timestamp: seg.start
+			}))
+		});
+	}
+
+	// Copy to clipboard handler
+	async function handleCopyToClipboard() {
+		if (!$currentMeeting || !$hasResult) return;
+
+		const success = await copyToClipboard({
+			title: $currentMeeting.title,
+			date: $currentMeeting.scheduled_at ? new Date($currentMeeting.scheduled_at).toLocaleDateString('ko-KR') : undefined,
+			summary: $resultsStore.currentResult?.summary,
+			actionItems: $resultsStore.actionItems.map(item => ({
+				content: item.content,
+				assignee: item.assignee_name
+			}))
+		});
+
+		if (success) {
+			toast.success('클립보드에 복사되었습니다');
+		} else {
+			toast.error('복사에 실패했습니다');
+		}
+	}
 
 	// Extract unique speakers from transcript
 	let uniqueSpeakers = $derived(
@@ -95,6 +173,9 @@
 	<title>결과 - {$currentMeeting?.title || '회의'} | MAX Meeting</title>
 </svelte:head>
 
+<!-- Keyboard shortcuts handler -->
+<KeyboardShortcuts {shortcuts} bind:showHelp={showShortcutsHelp} />
+
 <div class="results-page">
 	{#if $isLoading || $resultsStore.isLoading}
 		<div class="loading-container">
@@ -114,20 +195,29 @@
 				{/if}
 
 				{#if $hasResult}
+					<!-- Export buttons -->
+					<Button variant="ghost" size="sm" onclick={handleCopyToClipboard} title="클립보드에 복사 (Ctrl+Shift+C)">
+						{#snippet children()}
+							<ClipboardCopy class="w-4 h-4" />
+						{/snippet}
+					</Button>
+
+					<Button variant="ghost" size="sm" onclick={handleExportPdf} title="PDF로 내보내기 (Ctrl+P)">
+						{#snippet children()}
+							<Download class="w-4 h-4" />
+						{/snippet}
+					</Button>
+
 					<Button variant="secondary" size="sm" onclick={handleRegenerate} loading={$resultsStore.isGenerating}>
 						{#snippet children()}
-							<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-							</svg>
+							<RefreshCw class="w-4 h-4 mr-1" />
 							재생성
 						{/snippet}
 					</Button>
 
 					<Button variant="secondary" size="sm" onclick={handleEdit}>
 						{#snippet children()}
-							<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-							</svg>
+							<Pencil class="w-4 h-4 mr-1" />
 							수정
 						{/snippet}
 					</Button>
@@ -135,9 +225,7 @@
 					{#if !$isVerified}
 						<Button variant="primary" size="sm" onclick={handleVerify}>
 							{#snippet children()}
-								<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-								</svg>
+								<Check class="w-4 h-4 mr-1" />
 								검증
 							{/snippet}
 						</Button>
