@@ -86,21 +86,21 @@ function createNotesStore() {
 						agenda_id: note.agendaId,
 						content_length: note.content?.length
 					});
-					const response = await api.post<{ data: { id: number; agenda_id: number; content: string; created_at: string; updated_at: string } }>(`/meetings/${state.meetingId}/notes`, {
+					const response = await api.post<{ id: number; agenda_id: number; content: string; created_at: string; updated_at: string }>(`/meetings/${state.meetingId}/notes`, {
 						agenda_id: note.agendaId,
 						content: note.content
 					});
-					console.log('[notes] 새 노트 생성 완료:', response.data?.id);
+					console.log('[notes] 새 노트 생성 완료:', response?.id);
 					// Update with server-generated ID (handle snake_case conversion)
 					update((s) => {
 						const updatedNotes = new Map(s.notes);
 						const existingNote = updatedNotes.get(agendaId);
-						if (existingNote) {
+						if (existingNote && response?.id) {
 							updatedNotes.set(agendaId, {
 								...existingNote,
-								id: response.data.id,
-								createdAt: new Date(response.data.created_at),
-								updatedAt: new Date(response.data.updated_at)
+								id: response.id,
+								createdAt: new Date(response.created_at),
+								updatedAt: new Date(response.updated_at)
 							});
 						}
 						return { ...s, notes: updatedNotes };
