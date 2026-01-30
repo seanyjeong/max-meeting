@@ -208,7 +208,7 @@ function generatePdfHtml(meeting: MeetingData): string {
 
 	${meeting.transcriptSegments && meeting.transcriptSegments.length > 0 ? `
 	<div class="page-break"></div>
-	<h2>전사록</h2>
+	<h2>대화 내용</h2>
 	<div class="transcript">
 		${meeting.transcriptSegments.map(seg => `
 			<div class="transcript-segment">

@@ -167,7 +167,7 @@
 				<Card padding={false}>
 					{#snippet children()}
 						<div class="panel-header padded">
-							<h2>원본 전사록</h2>
+							<h2>원본 대화 내용</h2>
 							<span class="hint">클릭하여 타임스탬프 삽입</span>
 						</div>
 						<TranscriptViewer onSegmentClick={handleSegmentClick} />

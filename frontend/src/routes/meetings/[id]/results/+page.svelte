@@ -98,7 +98,7 @@
 	const tabConfig = $derived([
 		{ id: 'summary', label: '요약', icon: FileText },
 		{ id: 'actions', label: '실행 항목', icon: ListTodo, badge: $resultsStore.actionItems.length || undefined },
-		{ id: 'transcript', label: '전사록', icon: FileAudio }
+		{ id: 'transcript', label: '대화 내용', icon: FileAudio }
 	]);
 
 	// Keyboard shortcuts (typed for KeyboardShortcuts component)
@@ -111,7 +111,7 @@
 	}> = [
 		{ key: '1', description: '요약 탭', action: () => { activeTab = 'summary' }, category: '탭 전환' },
 		{ key: '2', description: '실행 항목 탭', action: () => { activeTab = 'actions' }, category: '탭 전환' },
-		{ key: '3', description: '전사록 탭', action: () => { activeTab = 'transcript' }, category: '탭 전환' },
+		{ key: '3', description: '대화 내용 탭', action: () => { activeTab = 'transcript' }, category: '탭 전환' },
 		{ key: 'p', modifiers: ['ctrl'], description: 'PDF 내보내기', action: () => { handleExportPdf() }, category: '내보내기' },
 		{ key: 'c', modifiers: ['ctrl', 'shift'], description: '클립보드에 복사', action: () => { handleCopyToClipboard() }, category: '내보내기' },
 		{ key: 'e', description: '수정 모드', action: () => { handleEdit() }, category: '편집' },
@@ -402,7 +402,7 @@
 						aria-selected={activeTab === 'transcript'}
 						onclick={() => activeTab = 'transcript'}
 					>
-						전사록
+						대화 내용
 					</button>
 				</div>
 
