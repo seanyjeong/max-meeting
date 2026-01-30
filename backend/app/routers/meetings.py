@@ -371,3 +371,74 @@ async def remove_attendee(
         )
 
     return None
+
+
+# ============================================
+# Transcript Endpoint
+# ============================================
+
+
+@router.get("/{meeting_id}/transcript")
+async def get_meeting_transcript(
+    meeting_id: int,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Get combined transcript for a meeting (all recordings).
+    Returns segments from all transcripts ordered by time.
+    """
+    from sqlalchemy import select
+    from app.models.transcript import Transcript
+
+    # Check meeting exists
+    service = MeetingService(db)
+    meeting = await service.get_by_id(meeting_id)
+
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting not found",
+        )
+
+    # Get all transcripts for this meeting
+    result = await db.execute(
+        select(Transcript)
+        .where(Transcript.meeting_id == meeting_id)
+        .order_by(Transcript.recording_id, Transcript.chunk_index)
+    )
+    transcripts = result.scalars().all()
+
+    if not transcripts:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No transcript found for this meeting",
+        )
+
+    # Combine all segments from all transcripts
+    all_segments = []
+    segment_id = 0
+    for transcript in transcripts:
+        if transcript.segments:
+            for seg in transcript.segments:
+                all_segments.append({
+                    "id": segment_id,
+                    "start": seg.get("start", 0),
+                    "end": seg.get("end", 0),
+                    "text": seg.get("text", ""),
+                    "speaker_label": seg.get("speaker"),
+                    "speaker_name": None,
+                    "confidence": seg.get("confidence"),
+                })
+                segment_id += 1
+
+    # Sort by start time
+    all_segments.sort(key=lambda x: x["start"])
+
+    return {
+        "data": {
+            "meeting_id": meeting_id,
+            "segments": all_segments,
+            "total_segments": len(all_segments),
+        }
+    }
