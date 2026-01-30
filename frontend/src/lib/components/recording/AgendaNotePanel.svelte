@@ -63,22 +63,35 @@
 
 	function goToPrevAgenda() {
 		if (currentAgendaIndex > 0) {
-			currentAgendaIndex--;
+			const prevIndex = currentAgendaIndex - 1;
+			const prevAgenda = agendas[prevIndex];
+			// 이동하려는 안건에 타임스탬프 저장 (아직 시작 시간이 없는 경우만)
+			if (prevAgenda && prevAgenda.started_at_seconds === null) {
+				onNextAgenda(prevAgenda.id, recordingTime);
+			}
+			currentAgendaIndex = prevIndex;
 		}
 	}
 
 	function goToNextAgenda() {
 		if (currentAgendaIndex < agendas.length - 1) {
-			// Mark transition with timestamp for recording
-			if (currentAgenda) {
-				onNextAgenda(currentAgenda.id, recordingTime);
+			const nextIndex = currentAgendaIndex + 1;
+			const nextAgenda = agendas[nextIndex];
+			// 이동하려는 안건에 타임스탬프 저장 (아직 시작 시간이 없는 경우만)
+			if (nextAgenda && nextAgenda.started_at_seconds === null) {
+				onNextAgenda(nextAgenda.id, recordingTime);
 			}
-			currentAgendaIndex++;
+			currentAgendaIndex = nextIndex;
 		}
 	}
 
 	function goToAgenda(index: number) {
-		if (index >= 0 && index < agendas.length) {
+		if (index >= 0 && index < agendas.length && index !== currentAgendaIndex) {
+			const targetAgenda = agendas[index];
+			// 이동하려는 안건에 타임스탬프 저장 (아직 시작 시간이 없는 경우만)
+			if (targetAgenda && targetAgenda.started_at_seconds === null) {
+				onNextAgenda(targetAgenda.id, recordingTime);
+			}
 			currentAgendaIndex = index;
 		}
 	}
