@@ -10,22 +10,8 @@
 	const CHECK_INTERVAL = 5 * 60 * 1000;
 
 	async function checkForUpdates() {
-		try {
-			// Fetch version.json with cache-busting
-			const response = await fetch(`/version.json?t=${Date.now()}`, {
-				cache: 'no-store'
-			});
-
-			if (response.ok) {
-				const data = await response.json();
-				if (data.version && data.version !== APP_VERSION) {
-					showUpdateBanner = true;
-				}
-			}
-		} catch (error) {
-			// Silently fail - version check is optional
-			console.debug('Version check failed:', error);
-		}
+		// 업데이트 알림 비활성화 - 사용자 요청
+		return;
 	}
 
 	function handleUpdate() {

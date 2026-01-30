@@ -145,12 +145,40 @@ async def parse_agenda_text(
     agenda_service = AgendaService(db)
     llm_service = get_llm_service()
 
+    async def generate_questions_for_agenda(agenda_id: int, title: str, description: str | None):
+        """Generate questions for an agenda item."""
+        try:
+            questions_text = await generate_questions(
+                agenda_title=title,
+                agenda_description=description,
+                num_questions=4,
+            )
+
+            for i, q in enumerate(questions_text):
+                question = AgendaQuestion(
+                    agenda_id=agenda_id,
+                    question=q,
+                    order_num=i,
+                    is_generated=True,
+                    answered=False,
+                )
+                db.add(question)
+
+            await db.flush()
+        except Exception as e:
+            logger.warning(f"Failed to auto-generate questions for agenda {agenda_id}: {e}")
+
     async def create_agenda_recursive(
         item: dict,
         parent_id: int | None = None,
         is_root: bool = True
     ) -> AgendaResponse:
-        """Recursively create agenda and its children."""
+        """Recursively create agenda and its children.
+
+        질문 생성 규칙:
+        - 자식안건이 있으면 자식안건에 질문 생성
+        - 자식안건이 없으면 해당 안건에 질문 생성
+        """
         agenda_data = AgendaCreate(
             title=item["title"],
             description=item.get("description"),
@@ -158,32 +186,10 @@ async def parse_agenda_text(
         )
         agenda = await agenda_service.create_agenda(meeting_id, agenda_data)
 
-        # Auto-generate questions only for root-level agendas
-        if is_root:
-            try:
-                questions_text = await generate_questions(
-                    agenda_title=agenda.title,
-                    agenda_description=agenda.description,
-                    num_questions=4,
-                )
-
-                for i, q in enumerate(questions_text):
-                    question = AgendaQuestion(
-                        agenda_id=agenda.id,
-                        question=q,
-                        order_num=i,
-                        is_generated=True,
-                        answered=False,
-                    )
-                    db.add(question)
-
-                await db.flush()
-
-            except Exception as e:
-                logger.warning(f"Failed to auto-generate questions for agenda {agenda.id}: {e}")
-
-        # Create children recursively
+        # Create children recursively first
         children_responses = []
+        has_children = bool(item.get("children"))
+
         for child_item in item.get("children", []):
             child_response = await create_agenda_recursive(
                 child_item,
@@ -191,6 +197,14 @@ async def parse_agenda_text(
                 is_root=False
             )
             children_responses.append(child_response)
+
+        # 질문 생성: 자식안건이 없는 경우에만 현재 안건에 질문 생성
+        if not has_children:
+            await generate_questions_for_agenda(
+                agenda.id,
+                agenda.title,
+                agenda.description
+            )
 
         # Build response with children
         response = AgendaResponse.model_validate(agenda)

@@ -6,7 +6,7 @@
 
 | 구분 | 값 |
 |------|-----|
-| **Version** | v1.2.0 (2026-01-30) |
+| **Version** | v1.3.0 (2026-01-30) |
 | **Backend** | FastAPI @ `localhost:9000` |
 | **Frontend** | SvelteKit @ Vercel (`max-meeting.vercel.app`) |
 | **DB** | PostgreSQL @ `localhost:5432/maxmeeting` |
@@ -76,7 +76,17 @@ PGPASSWORD=password psql -h localhost -U maxmeeting -d maxmeeting
 
 ---
 
-## 최근 변경사항 (v1.2.0)
+## 최근 변경사항 (v1.3.0)
+
+| 변경 | 설명 |
+|------|------|
+| 계층형 안건 | 자식안건 토글 표시, 질문은 자식안건에 생성 |
+| 녹음 타임스탬프 | 자식안건 클릭 시 개별 타임스탬프 저장 |
+| 계층형 필터 | 결과 페이지에서 대안건 > 자식안건 드롭다운 필터 |
+| PDF 회의록 | 인쇄용 회의록 페이지 (`/results/report`) |
+| PWA 알림 제거 | 업데이트 알림 비활성화 |
+
+## 이전 변경사항 (v1.2.0)
 
 | 변경 | 설명 |
 |------|------|

@@ -10,11 +10,33 @@
 		isOffline
 	} from '$lib/stores/offlineCache';
 
-	$: meetingId = $page.params.id;
+	let meetingId = $derived($page.params.id);
 
-	let error = '';
-	let isGeneratingQuestions = false;
-	let isUsingCache = false;
+	let error = $state('');
+	let isGeneratingQuestions = $state(false);
+	let isUsingCache = $state(false);
+
+	// 안건 토글 상태
+	let expandedAgendas = $state(new Set<number>());
+	let expandedChildren = $state(new Set<number>());
+
+	function toggleAgenda(id: number) {
+		if (expandedAgendas.has(id)) {
+			expandedAgendas.delete(id);
+		} else {
+			expandedAgendas.add(id);
+		}
+		expandedAgendas = new Set(expandedAgendas);
+	}
+
+	function toggleChild(id: number) {
+		if (expandedChildren.has(id)) {
+			expandedChildren.delete(id);
+		} else {
+			expandedChildren.add(id);
+		}
+		expandedChildren = new Set(expandedChildren);
+	}
 
 	onMount(() => {
 		loadMeeting();
@@ -352,55 +374,135 @@
 			{#if !$currentMeeting.agendas || $currentMeeting.agendas.length === 0}
 				<p class="text-sm text-gray-500">안건이 없습니다</p>
 			{:else}
-				<div class="space-y-4">
+				<div class="space-y-3">
 					{#each $currentMeeting.agendas as agenda, index (agenda.id)}
-						<div class="border border-gray-200 rounded-lg p-4">
-							<div class="flex items-start justify-between">
-								<div class="flex items-start gap-3">
-									<span class="flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-medium">
-										{index + 1}
-									</span>
-									<div>
-										<h3 class="font-medium text-gray-900 flex items-center gap-2">
-											{agenda.title}
-											<span class={getAgendaStatusClass(agenda.status)}>
-												{#if agenda.status === 'completed'}
-													<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-														<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-													</svg>
-												{:else if agenda.status === 'in_progress'}
-													<svg class="w-4 h-4 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-														<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-													</svg>
-												{/if}
-											</span>
-										</h3>
-										{#if agenda.description}
-											<p class="mt-1 text-sm text-gray-500">{agenda.description}</p>
+						<div class="border border-gray-200 rounded-lg overflow-hidden">
+							<!-- 대안건 헤더 (클릭으로 토글) -->
+							<button
+								type="button"
+								onclick={() => toggleAgenda(agenda.id)}
+								class="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
+							>
+								<span class="flex-shrink-0 text-gray-400 transition-transform {expandedAgendas.has(agenda.id) ? 'rotate-90' : ''}">
+									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+									</svg>
+								</span>
+								<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-semibold">
+									{index + 1}
+								</span>
+								<div class="flex-1 min-w-0">
+									<h3 class="font-medium text-gray-900 flex items-center gap-2">
+										{agenda.title}
+										{#if agenda.children && agenda.children.length > 0}
+											<span class="text-xs text-gray-400">({agenda.children.length}개 하위 안건)</span>
 										{/if}
-									</div>
+										<span class={getAgendaStatusClass(agenda.status)}>
+											{#if agenda.status === 'completed'}
+												<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+													<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+												</svg>
+											{:else if agenda.status === 'in_progress'}
+												<svg class="w-4 h-4 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+													<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+												</svg>
+											{/if}
+										</span>
+									</h3>
+									{#if agenda.description}
+										<p class="mt-1 text-sm text-gray-500 truncate">{agenda.description}</p>
+									{/if}
 								</div>
-							</div>
+							</button>
 
-							<!-- Questions -->
-							{#if agenda.questions && agenda.questions.length > 0}
-								<div class="mt-4 pl-9">
-									<p class="text-sm font-medium text-gray-700 mb-2">토의 질문</p>
-									<ul class="space-y-2">
-										{#each agenda.questions as question (question.id)}
-											<li class="flex items-start gap-2 text-sm">
-												<input
-													type="checkbox"
-													checked={question.answered}
-													disabled
-													class="mt-0.5 h-4 w-4 rounded border-gray-300"
-												/>
-												<span class={question.answered ? 'text-gray-400 line-through' : 'text-gray-700'}>
-													{question.question}
-												</span>
-											</li>
-										{/each}
-									</ul>
+							<!-- 펼쳐진 내용 -->
+							{#if expandedAgendas.has(agenda.id)}
+								<div class="border-t border-gray-100 bg-gray-50/50">
+									<!-- 자식안건이 있으면 -->
+									{#if agenda.children && agenda.children.length > 0}
+										<div class="p-4 space-y-3">
+											{#each agenda.children as child, childIndex (child.id)}
+												<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+													<!-- 자식안건 헤더 -->
+													<button
+														type="button"
+														onclick={() => toggleChild(child.id)}
+														class="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
+													>
+														<span class="flex-shrink-0 text-gray-400 transition-transform {expandedChildren.has(child.id) ? 'rotate-90' : ''}">
+															<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+															</svg>
+														</span>
+														<span class="flex-shrink-0 text-sm font-medium text-gray-500">
+															{index + 1}.{childIndex + 1}
+														</span>
+														<span class="flex-1 text-sm font-medium text-gray-800">
+															{child.title}
+														</span>
+														{#if child.questions && child.questions.length > 0}
+															<span class="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+																질문 {child.questions.length}
+															</span>
+														{/if}
+													</button>
+
+													<!-- 자식안건 내용 -->
+													{#if expandedChildren.has(child.id)}
+														<div class="px-4 pb-3 pt-1 border-t border-gray-100">
+															{#if child.description}
+																<p class="text-sm text-gray-600 mb-3">{child.description}</p>
+															{/if}
+															<!-- 자식안건의 질문 -->
+															{#if child.questions && child.questions.length > 0}
+																<div class="space-y-2">
+																	<p class="text-xs font-semibold text-gray-500 uppercase">토의 질문</p>
+																	{#each child.questions as question (question.id)}
+																		<div class="flex items-start gap-2 text-sm">
+																			<input
+																				type="checkbox"
+																				checked={question.answered}
+																				disabled
+																				class="mt-0.5 h-4 w-4 rounded border-gray-300"
+																			/>
+																			<span class={question.answered ? 'text-gray-400 line-through' : 'text-gray-700'}>
+																				{question.question}
+																			</span>
+																		</div>
+																	{/each}
+																</div>
+															{/if}
+														</div>
+													{/if}
+												</div>
+											{/each}
+										</div>
+									{:else}
+										<!-- 자식안건 없으면 대안건 상세 + 질문 표시 -->
+										<div class="p-4">
+											{#if agenda.description}
+												<p class="text-sm text-gray-600 mb-3">{agenda.description}</p>
+											{/if}
+											{#if agenda.questions && agenda.questions.length > 0}
+												<div class="space-y-2">
+													<p class="text-xs font-semibold text-gray-500 uppercase">토의 질문</p>
+													{#each agenda.questions as question (question.id)}
+														<div class="flex items-start gap-2 text-sm">
+															<input
+																type="checkbox"
+																checked={question.answered}
+																disabled
+																class="mt-0.5 h-4 w-4 rounded border-gray-300"
+															/>
+															<span class={question.answered ? 'text-gray-400 line-through' : 'text-gray-700'}>
+																{question.question}
+															</span>
+														</div>
+													{/each}
+												</div>
+											{/if}
+										</div>
+									{/if}
 								</div>
 							{/if}
 						</div>

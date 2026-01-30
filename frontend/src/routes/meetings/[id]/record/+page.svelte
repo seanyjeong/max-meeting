@@ -286,10 +286,41 @@
 		activeAgendaId = newAgendaId;
 	}
 
+	// 자식안건 타임스탬프 핸들러
+	async function handleChildAgendaChange(prevId: number | null, childId: number, currentTime: number) {
+		// Close previous segment (대안건 또는 자식안건)
+		if (prevId !== null && prevId !== childId) {
+			await closeSegment(prevId, currentTime);
+		}
+
+		// Open new segment for child
+		await openSegment(childId, currentTime);
+		activeAgendaId = childId;
+	}
+
+	// 안건 찾기 (대안건 또는 자식안건)
+	function findAgendaById(agendaId: number): Agenda | null {
+		if (!meeting) return null;
+
+		// 대안건에서 찾기
+		const parent = meeting.agendas.find(a => a.id === agendaId);
+		if (parent) return parent;
+
+		// 자식안건에서 찾기
+		for (const agenda of meeting.agendas) {
+			if (agenda.children) {
+				const child = agenda.children.find(c => c.id === agendaId);
+				if (child) return child;
+			}
+		}
+
+		return null;
+	}
+
 	async function closeSegment(agendaId: number, endTime: number) {
 		if (!meeting) return;
 
-		const agenda = meeting.agendas.find(a => a.id === agendaId);
+		const agenda = findAgendaById(agendaId);
 		if (!agenda) return;
 
 		const segments = [...(agenda.time_segments || [])];
@@ -310,7 +341,7 @@
 	async function openSegment(agendaId: number, startTime: number) {
 		if (!meeting) return;
 
-		const agenda = meeting.agendas.find(a => a.id === agendaId);
+		const agenda = findAgendaById(agendaId);
 		if (!agenda) return;
 
 		const segments = [...(agenda.time_segments || [])];
@@ -336,9 +367,22 @@
 		if (meeting) {
 			meeting = {
 				...meeting,
-				agendas: meeting.agendas.map((a) =>
-					a.id === agendaId ? { ...a, ...updates } : a
-				)
+				agendas: meeting.agendas.map((a) => {
+					// 대안건 업데이트
+					if (a.id === agendaId) {
+						return { ...a, ...updates };
+					}
+					// 자식안건 업데이트
+					if (a.children) {
+						return {
+							...a,
+							children: a.children.map((c) =>
+								c.id === agendaId ? { ...c, ...updates } : c
+							)
+						};
+					}
+					return a;
+				})
 			};
 		}
 	}
@@ -463,6 +507,7 @@
 					recordingTime={$recordingTime}
 					isRecording={$isRecording}
 					onAgendaChange={handleAgendaChange}
+					onChildAgendaChange={handleChildAgendaChange}
 					onQuestionToggle={handleQuestionToggle}
 					onNoteChange={handleNoteChange}
 				/>

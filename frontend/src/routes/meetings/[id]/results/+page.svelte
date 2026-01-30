@@ -14,7 +14,7 @@
 	import { toast } from '$lib/stores/toast';
 	import { api } from '$lib/api';
 	import { exportToPdf, copyToClipboard } from '$lib/utils/exportPdf';
-	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio, Mic, Loader2 } from 'lucide-svelte';
+	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio, Mic, Loader2, Printer } from 'lucide-svelte';
 	import type { MeetingDetail } from '$lib/stores/meeting';
 
 	// Recording status types (matches backend RecordingResponse)
@@ -344,6 +344,13 @@
 					<Button variant="ghost" size="sm" onclick={handleExportPdf} title="PDF로 내보내기 (Ctrl+P)">
 						{#snippet children()}
 							<Download class="w-4 h-4" />
+						{/snippet}
+					</Button>
+
+					<Button variant="secondary" size="sm" onclick={() => goto(`/meetings/${meetingId}/results/report`)} title="인쇄용 회의록">
+						{#snippet children()}
+							<Printer class="w-4 h-4 mr-1" />
+							회의록
 						{/snippet}
 					</Button>
 

@@ -9,6 +9,7 @@
 		recordingTime: number;
 		isRecording: boolean;
 		onAgendaChange: (prevAgendaId: number | null, newAgendaId: number, currentTime: number) => void;
+		onChildAgendaChange?: (prevId: number | null, childId: number, currentTime: number) => void;
 		onQuestionToggle: (questionId: number, answered: boolean) => void;
 		onNoteChange: (agendaId: number, content: string) => void;
 	}
@@ -20,18 +21,25 @@
 		recordingTime,
 		isRecording,
 		onAgendaChange,
+		onChildAgendaChange,
 		onQuestionToggle,
 		onNoteChange
 	}: Props = $props();
 
 	let noteDebounceTimers = new Map<number, ReturnType<typeof setTimeout>>();
 	let listCollapsed = $state(false);
+	let activeChildId = $state<number | null>(null);
 
 	// Current agenda
 	let currentAgenda = $derived(agendas[currentAgendaIndex]);
-	let noteContent = $derived(currentAgenda ? (notes.get(currentAgenda.id) || '') : '');
-	let answeredCount = $derived(currentAgenda ? currentAgenda.questions.filter(q => q.answered).length : 0);
-	let totalQuestions = $derived(currentAgenda ? currentAgenda.questions.length : 0);
+	let noteContent = $derived(currentAgenda ? (notes.get(activeChildId || currentAgenda.id) || '') : '');
+	let activeItem = $derived(
+		activeChildId && currentAgenda?.children
+			? currentAgenda.children.find(c => c.id === activeChildId) || currentAgenda
+			: currentAgenda
+	);
+	let answeredCount = $derived(activeItem ? activeItem.questions.filter(q => q.answered).length : 0);
+	let totalQuestions = $derived(activeItem ? activeItem.questions.length : 0);
 
 	// Cleanup on destroy
 	onDestroy(() => {
@@ -114,11 +122,28 @@
 
 			// 녹음 중일 때만 time_segments 처리
 			if (isRecording) {
-				onAgendaChange(prevAgenda?.id ?? null, targetAgenda.id, recordingTime);
+				onAgendaChange(activeChildId ?? prevAgenda?.id ?? null, targetAgenda.id, recordingTime);
 			}
 
 			currentAgendaIndex = index;
+			activeChildId = null; // 대안건으로 이동 시 자식안건 선택 해제
 		}
+	}
+
+	function goToChildAgenda(parentIndex: number, childId: number) {
+		const parentAgenda = agendas[parentIndex];
+
+		// 같은 자식안건이면 무시
+		if (activeChildId === childId && currentAgendaIndex === parentIndex) return;
+
+		// 녹음 중일 때만 time_segments 처리
+		if (isRecording && onChildAgendaChange) {
+			const prevId = activeChildId ?? agendas[currentAgendaIndex]?.id ?? null;
+			onChildAgendaChange(prevId, childId, recordingTime);
+		}
+
+		currentAgendaIndex = parentIndex;
+		activeChildId = childId;
 	}
 
 	function goToPrevAgenda() {
@@ -131,6 +156,10 @@
 		if (currentAgendaIndex < agendas.length - 1) {
 			goToAgenda(currentAgendaIndex + 1);
 		}
+	}
+
+	function isChildActive(childId: number): boolean {
+		return activeChildId === childId;
 	}
 
 	function toggleListCollapse() {
@@ -163,26 +192,54 @@
 			</button>
 
 			{#if !listCollapsed}
-				<div class="max-h-[180px] overflow-y-auto border-t border-gray-100">
+				<div class="max-h-[220px] overflow-y-auto border-t border-gray-100">
 					{#each agendas as agenda, index (agenda.id)}
+						<!-- 대안건 -->
 						<button
 							type="button"
 							onclick={() => goToAgenda(index)}
 							class="w-full h-[48px] px-4 flex items-center gap-3 text-left transition-colors
-								{index === currentAgendaIndex
+								{index === currentAgendaIndex && !activeChildId
 									? 'bg-blue-50 border-l-4 border-blue-600'
-									: 'hover:bg-gray-50 border-l-4 border-transparent'}"
+									: index === currentAgendaIndex
+										? 'bg-blue-50/50 border-l-4 border-blue-300'
+										: 'hover:bg-gray-50 border-l-4 border-transparent'}"
 						>
 							<span class="w-5 text-center font-medium {getStatusColor(agenda, index)}">
 								{getStatusIcon(agenda, index)}
 							</span>
-							<span class="flex-1 text-sm truncate {index === currentAgendaIndex ? 'font-semibold text-blue-900' : 'text-gray-700'}">
-								{agenda.order_num}. {truncate(agenda.title, 18)}
+							<span class="flex-1 text-sm truncate {index === currentAgendaIndex && !activeChildId ? 'font-semibold text-blue-900' : 'text-gray-700'}">
+								{agenda.order_num}. {truncate(agenda.title, 16)}
+								{#if agenda.children && agenda.children.length > 0}
+									<span class="text-gray-400 text-xs">+{agenda.children.length}</span>
+								{/if}
 							</span>
 							<span class="text-xs text-gray-400 tabular-nums w-14 text-right">
 								{formatAgendaTime(agenda)}
 							</span>
 						</button>
+
+						<!-- 자식안건들 (현재 대안건이 선택된 경우에만 표시) -->
+						{#if index === currentAgendaIndex && agenda.children && agenda.children.length > 0}
+							{#each agenda.children as child, childIdx (child.id)}
+								<button
+									type="button"
+									onclick={() => goToChildAgenda(index, child.id)}
+									class="w-full h-[40px] pl-10 pr-4 flex items-center gap-2 text-left transition-colors
+										{isChildActive(child.id)
+											? 'bg-purple-50 border-l-4 border-purple-500'
+											: 'hover:bg-gray-50 border-l-4 border-transparent'}"
+								>
+									<span class="text-xs text-gray-400">{agenda.order_num}.{childIdx + 1}</span>
+									<span class="flex-1 text-sm truncate {isChildActive(child.id) ? 'font-medium text-purple-800' : 'text-gray-600'}">
+										{truncate(child.title, 14)}
+									</span>
+									{#if child.time_segments?.length}
+										<span class="text-xs text-purple-400">●</span>
+									{/if}
+								</button>
+							{/each}
+						{/if}
 					{/each}
 				</div>
 			{/if}
@@ -191,67 +248,84 @@
 		<!-- Scrollable content area -->
 		<div class="flex-1 overflow-y-auto">
 			<div class="p-4 space-y-4">
-				<!-- Current Agenda Header -->
-				<div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
+				<!-- Current Item Header (대안건 또는 자식안건) -->
+				<div class="{activeChildId ? 'bg-purple-50 border-purple-100' : 'bg-blue-50 border-blue-100'} rounded-xl p-4 border">
 					<div class="flex items-start justify-between gap-2">
-						<h2 class="text-lg font-bold text-gray-900 leading-tight flex-1">
-							{currentAgenda.order_num}. {currentAgenda.title}
-						</h2>
-						{#if currentAgenda.status === 'in_progress'}
-							<span class="flex-shrink-0 px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
+						<div class="flex-1">
+							{#if activeChildId && activeItem !== currentAgenda}
+								<!-- 자식안건 선택됨 -->
+								<p class="text-xs text-purple-600 mb-1">
+									{currentAgenda.order_num}. {currentAgenda.title}
+								</p>
+								<h2 class="text-lg font-bold text-gray-900 leading-tight">
+									↳ {activeItem.title}
+								</h2>
+							{:else}
+								<!-- 대안건 선택됨 -->
+								<h2 class="text-lg font-bold text-gray-900 leading-tight">
+									{currentAgenda.order_num}. {currentAgenda.title}
+								</h2>
+							{/if}
+						</div>
+						{#if activeItem.status === 'in_progress'}
+							<span class="flex-shrink-0 px-2.5 py-1 text-xs font-semibold {activeChildId ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'} rounded-full">
 								진행중
 							</span>
-						{:else if currentAgenda.status === 'completed'}
+						{:else if activeItem.status === 'completed'}
 							<span class="flex-shrink-0 px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
 								완료
 							</span>
 						{/if}
 					</div>
-					{#if currentAgenda.time_segments?.length}
-						<p class="mt-2 text-xs text-blue-600">
-							⏱ {formatAgendaTime(currentAgenda)}
-							{#if hasMultipleSegments(currentAgenda)}
-								<span class="text-purple-600">(재방문 {currentAgenda.time_segments.length - 1}회)</span>
+					{#if activeItem.time_segments?.length}
+						<p class="mt-2 text-xs {activeChildId ? 'text-purple-600' : 'text-blue-600'}">
+							⏱ {formatAgendaTime(activeItem)}
+							{#if hasMultipleSegments(activeItem)}
+								<span class="text-purple-600">(재방문 {activeItem.time_segments.length - 1}회)</span>
 							{/if}
 						</p>
 					{/if}
 				</div>
 
 				<!-- Description -->
-				{#if currentAgenda.description}
+				{#if activeItem.description}
 					<div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
 						<h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
 							상세 내용
 						</h3>
 						<p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-							{currentAgenda.description}
+							{activeItem.description}
 						</p>
 					</div>
 				{/if}
 
-				<!-- Children (Sub-topics) -->
-				{#if currentAgenda.children && currentAgenda.children.length > 0}
+				<!-- Children (Sub-topics) - 자식안건이 선택되지 않은 경우에만 표시 -->
+				{#if !activeChildId && currentAgenda.children && currentAgenda.children.length > 0}
 					<div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
 						<h3 class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">
-							하위 토픽
+							하위 안건 (클릭하여 선택)
 						</h3>
-						<ul class="space-y-2">
-							{#each currentAgenda.children as child (child.id)}
-								<li class="flex items-start gap-2">
-									<span class="text-blue-400 mt-0.5">•</span>
-									<div>
-										<span class="text-sm font-medium text-gray-800">{child.title}</span>
-										{#if child.description}
-											<p class="text-xs text-gray-600 mt-0.5">{child.description}</p>
-										{/if}
-									</div>
-								</li>
+						<div class="space-y-2">
+							{#each currentAgenda.children as child, idx (child.id)}
+								<button
+									type="button"
+									onclick={() => goToChildAgenda(currentAgendaIndex, child.id)}
+									class="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-blue-100 transition-colors text-left"
+								>
+									<span class="text-blue-500 font-medium text-sm">{currentAgenda.order_num}.{idx + 1}</span>
+									<span class="text-sm font-medium text-gray-800 flex-1">{child.title}</span>
+									{#if child.questions?.length}
+										<span class="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+											질문 {child.questions.length}
+										</span>
+									{/if}
+								</button>
 							{/each}
-						</ul>
+						</div>
 					</div>
 				{/if}
 
-				<!-- Questions Checklist -->
+				<!-- Questions Checklist (activeItem 기준) -->
 				{#if totalQuestions > 0}
 					<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
 						<div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
@@ -263,7 +337,7 @@
 							</span>
 						</div>
 						<div class="p-3 space-y-1">
-							{#each currentAgenda.questions as question (question.id)}
+							{#each activeItem.questions as question (question.id)}
 								<label class="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors min-h-[48px]">
 									<input
 										type="checkbox"

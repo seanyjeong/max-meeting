@@ -14,6 +14,8 @@
 	let searchQuery = $state('');
 	let filterSpeaker = $state<string | null>(null);
 	let selectedAgendaId = $state<number | 'all'>('all');
+	let selectedChildId = $state<number | 'all'>('all');
+	let showChildDropdown = $state<number | null>(null);
 
 	// Get unique speakers
 	let speakers = $derived(
@@ -60,13 +62,46 @@
 			if (selectedAgendaId !== 'all' && agendas.length > 0) {
 				const agenda = agendas.find(a => a.id === selectedAgendaId);
 				if (agenda) {
-					matchesAgenda = isSegmentInAgenda(segment, agenda);
+					// 자식안건 필터 적용
+					if (selectedChildId !== 'all' && agenda.children) {
+						const child = agenda.children.find(c => c.id === selectedChildId);
+						if (child) {
+							matchesAgenda = isSegmentInAgenda(segment, child);
+						} else {
+							matchesAgenda = false;
+						}
+					} else {
+						// 대안건 전체 (자식안건 포함)
+						matchesAgenda = isSegmentInAgenda(segment, agenda);
+						if (!matchesAgenda && agenda.children) {
+							for (const child of agenda.children) {
+								if (isSegmentInAgenda(segment, child)) {
+									matchesAgenda = true;
+									break;
+								}
+							}
+						}
+					}
 				}
 			}
 
 			return matchesSearch && matchesSpeaker && matchesAgenda;
 		})
 	);
+
+	function selectAgenda(agendaId: number | 'all', childId: number | 'all' = 'all') {
+		selectedAgendaId = agendaId;
+		selectedChildId = childId;
+		showChildDropdown = null;
+	}
+
+	function toggleChildDropdown(agendaId: number) {
+		if (showChildDropdown === agendaId) {
+			showChildDropdown = null;
+		} else {
+			showChildDropdown = agendaId;
+		}
+	}
 
 	// Calculate total duration for an agenda
 	function getAgendaDuration(agenda: Agenda): number {
@@ -136,31 +171,62 @@
 </script>
 
 <div class="transcript-viewer">
-	<!-- Agenda Tabs -->
+	<!-- Agenda Tabs with Child Dropdown -->
 	{#if agendas.length > 0}
 		<div class="agenda-tabs">
 			<button
 				type="button"
 				class="agenda-tab {selectedAgendaId === 'all' ? 'active' : ''}"
-				onclick={() => selectedAgendaId = 'all'}
+				onclick={() => selectAgenda('all')}
 			>
 				전체
 			</button>
 			{#each agendas as agenda (agenda.id)}
 				{@const duration = getAgendaDuration(agenda)}
 				{@const hasSegments = agenda.time_segments?.length || agenda.started_at_seconds !== null}
-				<button
-					type="button"
-					class="agenda-tab {selectedAgendaId === agenda.id ? 'active' : ''} {!hasSegments ? 'disabled' : ''}"
-					onclick={() => hasSegments && (selectedAgendaId = agenda.id)}
-					disabled={!hasSegments}
-				>
-					<span class="agenda-num">{agenda.order_num}.</span>
-					<span class="agenda-title">{truncate(agenda.title, 10)}</span>
-					{#if duration > 0}
-						<span class="agenda-duration">({formatDuration(duration)})</span>
+				{@const hasChildren = agenda.children && agenda.children.length > 0}
+				<div class="agenda-tab-wrapper">
+					<button
+						type="button"
+						class="agenda-tab {selectedAgendaId === agenda.id ? 'active' : ''} {!hasSegments && !hasChildren ? 'disabled' : ''}"
+						onclick={() => hasChildren ? toggleChildDropdown(agenda.id) : (hasSegments && selectAgenda(agenda.id))}
+						disabled={!hasSegments && !hasChildren}
+					>
+						<span class="agenda-num">{agenda.order_num}.</span>
+						<span class="agenda-title">{truncate(agenda.title, 8)}</span>
+						{#if hasChildren}
+							<svg class="w-3 h-3 ml-1 transition-transform {showChildDropdown === agenda.id ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+							</svg>
+						{:else if duration > 0}
+							<span class="agenda-duration">({formatDuration(duration)})</span>
+						{/if}
+					</button>
+
+					<!-- 자식안건 드롭다운 -->
+					{#if hasChildren && showChildDropdown === agenda.id}
+						<div class="child-dropdown">
+							<button
+								type="button"
+								class="child-item {selectedAgendaId === agenda.id && selectedChildId === 'all' ? 'active' : ''}"
+								onclick={() => selectAgenda(agenda.id, 'all')}
+							>
+								전체 ({agenda.order_num})
+							</button>
+							{#each agenda.children as child, idx (child.id)}
+								{@const childHasSegments = child.time_segments?.length || child.started_at_seconds !== null}
+								<button
+									type="button"
+									class="child-item {selectedChildId === child.id ? 'active' : ''} {!childHasSegments ? 'disabled' : ''}"
+									onclick={() => childHasSegments && selectAgenda(agenda.id, child.id)}
+									disabled={!childHasSegments}
+								>
+									{agenda.order_num}.{idx + 1} {truncate(child.title, 12)}
+								</button>
+							{/each}
+						</div>
 					{/if}
-				</button>
+				</div>
 			{/each}
 		</div>
 	{/if}
@@ -368,6 +434,56 @@
 	.agenda-duration {
 		font-size: 0.75rem;
 		opacity: 0.7;
+	}
+
+	.agenda-tab-wrapper {
+		position: relative;
+	}
+
+	.child-dropdown {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		margin-top: 0.25rem;
+		min-width: 180px;
+		background: white;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.5rem;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		z-index: 50;
+		overflow: hidden;
+	}
+
+	.child-item {
+		display: block;
+		width: 100%;
+		padding: 0.625rem 1rem;
+		text-align: left;
+		font-size: 0.8125rem;
+		color: #374151;
+		background: white;
+		border: none;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.child-item:hover:not(.disabled) {
+		background: #f3f4f6;
+	}
+
+	.child-item.active {
+		background: #eff6ff;
+		color: #2563eb;
+		font-weight: 500;
+	}
+
+	.child-item.disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.child-item + .child-item {
+		border-top: 1px solid #f3f4f6;
 	}
 
 	.viewer-header {
