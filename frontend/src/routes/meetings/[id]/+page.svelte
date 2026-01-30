@@ -9,7 +9,7 @@
 		getCachedMeeting,
 		isOffline
 	} from '$lib/stores/offlineCache';
-	import { Pencil, Trash2, X, Check } from 'lucide-svelte';
+	import { Pencil, Trash2, X, Check, Plus } from 'lucide-svelte';
 
 	let meetingId = $derived($page.params.id);
 
@@ -21,9 +21,26 @@
 	let expandedAgendas = $state(new Set<number>());
 	let expandedChildren = $state(new Set<number>());
 
-	// 질문 수정/삭제 상태
+	// 질문 수정/삭제/생성 상태
 	let editingQuestionId = $state<number | null>(null);
 	let editingQuestionText = $state('');
+	let addingQuestionAgendaId = $state<number | null>(null);
+	let newQuestionText = $state('');
+
+	async function addQuestion(agendaId: number) {
+		if (!newQuestionText.trim()) return;
+		try {
+			await api.post(`/agendas/${agendaId}/questions`, {
+				question: newQuestionText.trim()
+			});
+			newQuestionText = '';
+			addingQuestionAgendaId = null;
+			await loadMeeting();
+		} catch (err) {
+			console.error('Failed to add question:', err);
+			error = '질문 추가에 실패했습니다.';
+		}
+	}
 
 	async function deleteQuestion(questionId: number) {
 		if (!confirm('이 질문을 삭제하시겠습니까?')) return;
@@ -527,6 +544,31 @@
 																	{/each}
 																</div>
 															{/if}
+															<!-- 질문 추가 버튼 -->
+															{#if addingQuestionAgendaId === child.id}
+																<div class="flex items-center gap-2 mt-2">
+																	<input
+																		type="text"
+																		bind:value={newQuestionText}
+																		placeholder="새 질문 입력..."
+																		class="flex-1 px-2 py-1 text-sm border border-green-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+																		onkeydown={(e) => e.key === 'Enter' && addQuestion(child.id)}
+																	/>
+																	<button onclick={() => addQuestion(child.id)} class="p-1 text-green-600 hover:bg-green-50 rounded">
+																		<Check class="w-4 h-4" />
+																	</button>
+																	<button onclick={() => { addingQuestionAgendaId = null; newQuestionText = ''; }} class="p-1 text-gray-600 hover:bg-gray-100 rounded">
+																		<X class="w-4 h-4" />
+																	</button>
+																</div>
+															{:else}
+																<button
+																	onclick={() => addingQuestionAgendaId = child.id}
+																	class="mt-2 text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
+																>
+																	<Plus class="w-3 h-3" /> 질문 추가
+																</button>
+															{/if}
 														</div>
 													{/if}
 												</div>
@@ -578,6 +620,31 @@
 														</div>
 													{/each}
 												</div>
+											{/if}
+											<!-- 대안건 질문 추가 버튼 -->
+											{#if addingQuestionAgendaId === agenda.id}
+												<div class="flex items-center gap-2 mt-2">
+													<input
+														type="text"
+														bind:value={newQuestionText}
+														placeholder="새 질문 입력..."
+														class="flex-1 px-2 py-1 text-sm border border-green-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+														onkeydown={(e) => e.key === 'Enter' && addQuestion(agenda.id)}
+													/>
+													<button onclick={() => addQuestion(agenda.id)} class="p-1 text-green-600 hover:bg-green-50 rounded">
+														<Check class="w-4 h-4" />
+													</button>
+													<button onclick={() => { addingQuestionAgendaId = null; newQuestionText = ''; }} class="p-1 text-gray-600 hover:bg-gray-100 rounded">
+														<X class="w-4 h-4" />
+													</button>
+												</div>
+											{:else}
+												<button
+													onclick={() => addingQuestionAgendaId = agenda.id}
+													class="mt-2 text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
+												>
+													<Plus class="w-3 h-3" /> 질문 추가
+												</button>
 											{/if}
 										</div>
 									{/if}

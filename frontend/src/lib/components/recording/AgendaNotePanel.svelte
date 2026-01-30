@@ -238,6 +238,27 @@
 										<span class="text-xs text-purple-400">●</span>
 									{/if}
 								</button>
+								<!-- 하하위 안건들 (3레벨) -->
+								{#if child.children && child.children.length > 0}
+									{#each child.children as grandchild, grandchildIdx (grandchild.id)}
+										<button
+											type="button"
+											onclick={() => goToChildAgenda(index, grandchild.id)}
+											class="w-full h-[36px] pl-14 pr-4 flex items-center gap-2 text-left transition-colors
+												{isChildActive(grandchild.id)
+													? 'bg-pink-50 border-l-4 border-pink-500'
+													: 'hover:bg-gray-50 border-l-4 border-transparent'}"
+										>
+											<span class="text-xs text-gray-400">{agenda.order_num}.{childIdx + 1}.{grandchildIdx + 1}</span>
+											<span class="flex-1 text-xs truncate {isChildActive(grandchild.id) ? 'font-medium text-pink-800' : 'text-gray-500'}">
+												{truncate(grandchild.title, 12)}
+											</span>
+											{#if grandchild.time_segments?.length}
+												<span class="text-xs text-pink-400">●</span>
+											{/if}
+										</button>
+									{/each}
+								{/if}
 							{/each}
 						{/if}
 					{/each}

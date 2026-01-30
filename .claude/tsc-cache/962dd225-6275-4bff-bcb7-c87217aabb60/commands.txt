@@ -1,0 +1,2 @@
+frontend:build:cd /home/et/max-ops/max-meeting/frontend && npm run build
+frontend:tsc:cd /home/et/max-ops/max-meeting/frontend && npx tsc --noEmit

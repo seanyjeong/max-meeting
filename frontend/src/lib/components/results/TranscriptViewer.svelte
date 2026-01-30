@@ -445,7 +445,8 @@
 		top: 100%;
 		left: 0;
 		margin-top: 0.25rem;
-		min-width: 180px;
+		min-width: 240px;
+		max-width: 320px;
 		background: white;
 		border: 1px solid #e5e7eb;
 		border-radius: 0.5rem;
@@ -457,14 +458,15 @@
 	.child-item {
 		display: block;
 		width: 100%;
-		padding: 0.625rem 1rem;
+		padding: 0.75rem 1rem;
 		text-align: left;
-		font-size: 0.8125rem;
+		font-size: 0.875rem;
 		color: #374151;
 		background: white;
 		border: none;
 		cursor: pointer;
 		transition: background 0.15s;
+		line-height: 1.4;
 	}
 
 	.child-item:hover:not(.disabled) {

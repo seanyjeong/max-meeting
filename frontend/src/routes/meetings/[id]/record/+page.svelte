@@ -298,7 +298,7 @@
 		activeAgendaId = childId;
 	}
 
-	// 안건 찾기 (대안건 또는 자식안건)
+	// 안건 찾기 (대안건, 자식안건, 하하위안건)
 	function findAgendaById(agendaId: number): Agenda | null {
 		if (!meeting) return null;
 
@@ -311,6 +311,14 @@
 			if (agenda.children) {
 				const child = agenda.children.find(c => c.id === agendaId);
 				if (child) return child;
+
+				// 하하위안건에서 찾기 (3레벨)
+				for (const childAgenda of agenda.children) {
+					if (childAgenda.children) {
+						const grandchild = childAgenda.children.find(gc => gc.id === agendaId);
+						if (grandchild) return grandchild;
+					}
+				}
 			}
 		}
 
@@ -372,13 +380,25 @@
 					if (a.id === agendaId) {
 						return { ...a, ...updates };
 					}
-					// 자식안건 업데이트
+					// 자식안건 또는 하하위안건 업데이트
 					if (a.children) {
 						return {
 							...a,
-							children: a.children.map((c) =>
-								c.id === agendaId ? { ...c, ...updates } : c
-							)
+							children: a.children.map((c) => {
+								if (c.id === agendaId) {
+									return { ...c, ...updates };
+								}
+								// 하하위안건 업데이트 (3레벨)
+								if (c.children) {
+									return {
+										...c,
+										children: c.children.map((gc) =>
+											gc.id === agendaId ? { ...gc, ...updates } : gc
+										)
+									};
+								}
+								return c;
+							})
 						};
 					}
 					return a;

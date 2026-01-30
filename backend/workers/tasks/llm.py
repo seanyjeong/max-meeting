@@ -170,7 +170,11 @@ def generate_meeting_result(
             agenda_transcripts = {}  # agenda_id -> transcript text
 
             def get_agenda_transcript(agenda, all_segs: list[dict]) -> str:
-                """Extract transcript for an agenda from its time segments."""
+                """Extract transcript for an agenda from its time segments.
+
+                Uses segment midpoint for matching to handle cases where user
+                clicks agenda slightly after starting to speak.
+                """
                 # Priority 1: Use time_segments if available (supports multiple segments)
                 if agenda.time_segments:
                     texts = []
@@ -179,7 +183,7 @@ def generate_meeting_result(
                         end = seg.get('end') or float('inf')
                         matching = [
                             s["text"] for s in all_segs
-                            if start <= s["start"] < end and s["text"]
+                            if s["text"] and start <= (s["start"] + s.get("end", s["start"])) / 2 < end
                         ]
                         texts.extend(matching)
                     return " ".join(texts)
@@ -200,7 +204,7 @@ def generate_meeting_result(
 
                     matching = [
                         s["text"] for s in all_segs
-                        if start_time <= s["start"] < end_time and s["text"]
+                        if s["text"] and start_time <= (s["start"] + s.get("end", s["start"])) / 2 < end_time
                     ]
                     return " ".join(matching)
 
