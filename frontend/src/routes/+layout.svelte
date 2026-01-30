@@ -7,6 +7,8 @@
 	import QuickJump from '$lib/components/QuickJump.svelte';
 	import SkipLink from '$lib/components/SkipLink.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
+	import UpdateNotifier from '$lib/components/UpdateNotifier.svelte';
+	import { APP_VERSION } from '$lib/version';
 
 	// Public routes that don't require authentication
 	const publicRoutes = ['/login'];
@@ -43,8 +45,9 @@
 				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div class="flex justify-between h-16">
 						<div class="flex items-center">
-							<a href="/" class="text-xl font-bold text-primary-600">
-								MAX Meeting
+							<a href="/" class="flex items-baseline gap-2">
+								<span class="text-xl font-bold text-primary-600">MAX Meeting</span>
+								<span class="text-xs text-gray-400 font-normal">v{APP_VERSION}</span>
 							</a>
 							<div class="hidden md:ml-10 md:flex md:space-x-8">
 								<a
@@ -138,4 +141,5 @@
 {/if}
 
 <ToastContainer />
+<UpdateNotifier />
 

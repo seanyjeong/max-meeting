@@ -7,6 +7,7 @@ export { default as Input } from './Input.svelte';
 export { default as LoadingSpinner } from './LoadingSpinner.svelte';
 export { default as Modal } from './Modal.svelte';
 export { default as Toast } from './Toast.svelte';
+export { default as UpdateNotifier } from './UpdateNotifier.svelte';
 
 // Recording Components
 export * from './recording';

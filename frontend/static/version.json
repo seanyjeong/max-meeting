@@ -1,0 +1,5 @@
+{
+  "version": "1.1.0",
+  "buildDate": "2026-01-30",
+  "releaseNotes": "SQLAlchemy 성능 개선, 결과 페이지 UX 개선, PWA 지원"
+}
