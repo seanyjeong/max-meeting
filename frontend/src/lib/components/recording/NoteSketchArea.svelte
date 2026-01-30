@@ -81,7 +81,7 @@
 	}
 </script>
 
-<div class="flex flex-col h-full bg-white">
+<div class="flex flex-col h-full min-h-0 bg-white">
 	<!-- Tab buttons -->
 	<div class="flex border-b border-gray-200">
 		<button
@@ -105,15 +105,15 @@
 	</div>
 
 	<!-- Tab content -->
-	<div class="flex-1 overflow-hidden" role="tabpanel">
+	<div class="flex-1 min-h-0 overflow-hidden" role="tabpanel">
 		{#if activeTab === 'text'}
 			<!-- Text tab -->
 			<textarea
 				value={textContent}
 				oninput={handleTextInput}
 				placeholder="회의 노트를 작성하세요..."
-				class="w-full h-full p-4 text-sm text-gray-900 placeholder-gray-400 border-0 resize-none focus:ring-0 focus:outline-none font-mono"
-				style="font-family: 'SF Mono', 'Consolas', 'Monaco', 'Menlo', monospace;"
+				class="w-full h-full p-4 text-base text-gray-900 placeholder-gray-400 border-0 resize-none focus:ring-0 focus:outline-none"
+				style="line-height: 1.75; overflow-y: auto;"
 			></textarea>
 		{:else if activeTab === 'sketch'}
 			<!-- Sketch tab -->

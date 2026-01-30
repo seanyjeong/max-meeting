@@ -355,14 +355,31 @@
 
 			const meetingId = meetingResponse.id;
 
-			// Add agendas
-			for (let i = 0; i < validAgendas.length; i++) {
-				await api.post(`/meetings/${meetingId}/agendas`, {
-					title: validAgendas[i].title.trim(),
-					description: validAgendas[i].description.trim() || null,
-					order_num: i + 1
-				});
+			// Add agendas recursively (including children)
+			async function saveAgendasRecursively(
+				agendaList: AgendaInput[],
+				parentId: number | null = null
+			) {
+				for (let i = 0; i < agendaList.length; i++) {
+					const agenda = agendaList[i];
+					const response = await api.post<{ id: number }>(`/meetings/${meetingId}/agendas`, {
+						title: agenda.title.trim(),
+						description: agenda.description?.trim() || null,
+						order_num: i + 1,
+						parent_id: parentId
+					});
+
+					// Save children recursively
+					if (agenda.children && agenda.children.length > 0) {
+						const validChildren = agenda.children.filter(c => c.title.trim());
+						if (validChildren.length > 0) {
+							await saveAgendasRecursively(validChildren, response.id);
+						}
+					}
+				}
 			}
+
+			await saveAgendasRecursively(validAgendas);
 
 			goto(`/meetings/${meetingId}`);
 		} catch (err) {

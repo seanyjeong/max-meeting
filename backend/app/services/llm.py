@@ -143,9 +143,26 @@ Meeting Information:
 
         if agenda_info:
             # Use per-agenda transcript info for more accurate summaries
+            # Include agenda_id for precise mapping in response
             agendas_parts = []
-            for info in agenda_info:
-                agenda_text = f"\n### 안건 {info['order'] + 1}: {info['title']}"
+            for idx, info in enumerate(agenda_info):
+                agenda_id = info.get('id', idx)
+                parent_id = info.get('parent_id')
+                level = info.get('level', 0)
+
+                # Format: "### 안건 [ID:123] 1. 제목" or "### 안건 [ID:124] 1.1 자식 제목"
+                if level == 0:
+                    order_display = f"{info['order'] + 1}"
+                else:
+                    # Child agenda - find parent order
+                    parent_order = next(
+                        (a['order'] + 1 for a in agenda_info if a.get('id') == parent_id),
+                        info['order'] + 1
+                    )
+                    child_order = info.get('child_order', info['order'] + 1)
+                    order_display = f"{parent_order}.{child_order}"
+
+                agenda_text = f"\n### 안건 [ID:{agenda_id}] {order_display}: {info['title']}"
                 if info.get('transcript'):
                     agenda_text += f"\n[해당 안건 대화 내용]\n{info['transcript']}"
                 else:
@@ -186,15 +203,16 @@ Requirements:
 5. 실행 항목 추출 (담당자, 내용, 기한)
 6. 원본에 없는 내용을 추가하지 마세요
 7. JSON 형식으로만 응답하세요
+8. 각 안건에 대해 "[ID:숫자]"로 표시된 agenda_id를 반드시 사용하세요 (agenda_idx 대신)
 
 Output format:
 {{
   "summary": "Overall meeting summary",
   "transcript_status": "available|no_recording|no_speech",
   "data_sources": ["transcript", "notes", "agenda"],
-  "discussions": [{{"agenda_idx": 0, "content": "..."}}, ...],
-  "decisions": [{{"agenda_idx": 0, "content": "...", "type": "approved|postponed|rejected"}}, ...],
-  "action_items": [{{"agenda_idx": 0, "assignee": "Name", "content": "...", "due_date": "YYYY-MM-DD or null", "priority": "high|medium|low"}}],
+  "discussions": [{{"agenda_id": 123, "content": "..."}}, ...],
+  "decisions": [{{"agenda_id": 123, "content": "...", "type": "approved|postponed|rejected"}}, ...],
+  "action_items": [{{"agenda_id": 123, "assignee": "Name", "content": "...", "due_date": "YYYY-MM-DD or null", "priority": "high|medium|low"}}],
   "meeting_insights": {{
     "atmosphere": "positive|neutral|tense",
     "consensus_level": 85,
@@ -517,32 +535,45 @@ Return a valid JSON array with the hierarchical structure.
             "action_items": [],
         }
 
-        # Normalize discussions
+        # Normalize discussions - preserve both agenda_id (preferred) and agenda_idx (fallback)
         for item in result.get("discussions", []):
-            normalized["discussions"].append({
-                "agenda_idx": item.get("agenda_idx", item.get("agenda_id", 0)),
+            disc_item = {
                 "content": item.get("content", ""),
-            })
+            }
+            # Prefer agenda_id if present, otherwise use agenda_idx
+            if "agenda_id" in item:
+                disc_item["agenda_id"] = item["agenda_id"]
+            else:
+                disc_item["agenda_idx"] = item.get("agenda_idx", 0)
+            normalized["discussions"].append(disc_item)
 
         # Normalize decisions
         for item in result.get("decisions", []):
             decision_type = item.get("type", "approved")
             if decision_type not in ("approved", "postponed", "rejected"):
                 decision_type = "approved"
-            normalized["decisions"].append({
-                "agenda_idx": item.get("agenda_idx", item.get("agenda_id", 0)),
+            dec_item = {
                 "content": item.get("content", ""),
                 "type": decision_type,
-            })
+            }
+            if "agenda_id" in item:
+                dec_item["agenda_id"] = item["agenda_id"]
+            else:
+                dec_item["agenda_idx"] = item.get("agenda_idx", 0)
+            normalized["decisions"].append(dec_item)
 
         # Normalize action items
         for item in result.get("action_items", []):
-            normalized["action_items"].append({
-                "agenda_idx": item.get("agenda_idx", item.get("agenda_id", 0)),
+            action_item = {
                 "assignee": item.get("assignee", ""),
                 "content": item.get("content", ""),
                 "due_date": item.get("due_date"),
-            })
+            }
+            if "agenda_id" in item:
+                action_item["agenda_id"] = item["agenda_id"]
+            else:
+                action_item["agenda_idx"] = item.get("agenda_idx", 0)
+            normalized["action_items"].append(action_item)
 
         # Normalize meeting insights
         if "meeting_insights" in result:

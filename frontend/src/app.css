@@ -257,3 +257,39 @@
 		@apply min-h-touch-xl text-base;
 	}
 }
+
+/* High-resolution tablet optimizations (2000x1200 등 고해상도 태블릿) */
+@media (min-width: 1200px) and (max-width: 2000px) and (min-resolution: 1.5dppx) {
+	:root {
+		font-size: 18px; /* 기본 폰트 크기 증가 */
+	}
+
+	/* 녹음 페이지 최적화 */
+	.recording-page {
+		font-size: 1.1rem;
+	}
+
+	.agenda-panel {
+		min-width: 350px;
+	}
+
+	.note-area {
+		min-height: 500px;
+	}
+
+	/* 버튼 크기 확대 */
+	.btn {
+		@apply px-5 py-3;
+	}
+}
+
+/* 일반 태블릿 (iPad 등) */
+@media (min-width: 768px) and (max-width: 1024px) {
+	:root {
+		--sidebar-width: 260px;
+	}
+
+	.card {
+		@apply p-5;
+	}
+}

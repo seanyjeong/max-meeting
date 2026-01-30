@@ -238,11 +238,26 @@ def generate_meeting_result(
             sketches_combined = "\n".join(sketch_texts) if sketch_texts else None
 
             # Prepare agenda info with per-agenda transcripts
+            # Sort agendas: parents first (by order_num), then children (by parent_id, order_num)
+            parent_agendas = [a for a in meeting.agendas if a.parent_id is None]
+            parent_agendas.sort(key=lambda a: a.order_num)
+
+            # Build child_order map for each parent
+            child_orders: dict[int, int] = {}  # agenda_id -> child_order (1-based)
+            for parent in parent_agendas:
+                children = [a for a in meeting.agendas if a.parent_id == parent.id]
+                children.sort(key=lambda a: a.order_num)
+                for i, child in enumerate(children, 1):
+                    child_orders[child.id] = i
+
             agenda_info = [
                 {
                     "id": agenda.id,
                     "title": agenda.title,
                     "order": agenda.order_num,
+                    "parent_id": agenda.parent_id,
+                    "level": agenda.level,
+                    "child_order": child_orders.get(agenda.id, agenda.order_num),
                     "transcript": agenda_transcripts.get(agenda.id, ""),
                 }
                 for agenda in meeting.agendas
@@ -307,21 +322,32 @@ def generate_meeting_result(
             # Flush to get meeting_result.id
             await session.flush()
 
+            # Build agenda_id lookup set for validation
+            valid_agenda_ids = {a.id for a in meeting.agendas}
+
             # Create agenda discussions
             for discussion in llm_result["discussions"]:
-                agenda_idx = discussion.get("agenda_idx", 0)
-                if agenda_idx < len(meeting.agendas):
+                # Prefer agenda_id (direct), fallback to agenda_idx (index-based)
+                agenda_id = discussion.get("agenda_id")
+                if agenda_id is None:
+                    agenda_idx = discussion.get("agenda_idx", 0)
+                    agenda_id = meeting.agendas[agenda_idx].id if agenda_idx < len(meeting.agendas) else None
+
+                if agenda_id and agenda_id in valid_agenda_ids:
                     agenda_disc = AgendaDiscussion(
                         result_id=meeting_result.id,
-                        agenda_id=meeting.agendas[agenda_idx].id,
+                        agenda_id=agenda_id,
                         summary=discussion["content"],  # DB uses 'summary' not 'content'
                     )
                     session.add(agenda_disc)
 
             # Create decisions
             for decision in llm_result["decisions"]:
-                agenda_idx = decision.get("agenda_idx", 0)
-                agenda_id = meeting.agendas[agenda_idx].id if agenda_idx < len(meeting.agendas) else None
+                # Prefer agenda_id (direct), fallback to agenda_idx (index-based)
+                agenda_id = decision.get("agenda_id")
+                if agenda_id is None:
+                    agenda_idx = decision.get("agenda_idx", 0)
+                    agenda_id = meeting.agendas[agenda_idx].id if agenda_idx < len(meeting.agendas) else None
 
                 decision_type = decision.get("type", "approved")
                 try:
@@ -339,8 +365,11 @@ def generate_meeting_result(
 
             # Create action items
             for item in llm_result["action_items"]:
-                agenda_idx = item.get("agenda_idx", 0)
-                agenda_id = meeting.agendas[agenda_idx].id if agenda_idx < len(meeting.agendas) else None
+                # Prefer agenda_id (direct), fallback to agenda_idx (index-based)
+                agenda_id = item.get("agenda_id")
+                if agenda_id is None:
+                    agenda_idx = item.get("agenda_idx", 0)
+                    agenda_id = meeting.agendas[agenda_idx].id if agenda_idx < len(meeting.agendas) else None
 
                 # Parse due date if provided
                 due_date = None

@@ -43,6 +43,28 @@
 	let recordingsLoading = $state(true);
 	let statusPollInterval: ReturnType<typeof setInterval> | null = null;
 
+	// Progress tracking for U1
+	let sttStartTime = $state<number | null>(null);
+	let generatingStartTime = $state<number | null>(null);
+	let currentTime = $state(Date.now());
+	let progressUpdateInterval: ReturnType<typeof setInterval> | null = null;
+
+	// Estimated progress based on time (STT: ~10x recording duration, LLM: ~60s)
+	let sttProgress = $derived.by(() => {
+		if (!sttStartTime || processingStatus !== 'processing') return 0;
+		const elapsed = (currentTime - sttStartTime) / 1000; // seconds
+		const totalRecordingDuration = recordings.reduce((sum, r) => sum + (r.duration_seconds || 60), 0);
+		const estimatedTime = totalRecordingDuration * 10; // STT takes ~10x recording time
+		return Math.min(95, Math.round((elapsed / estimatedTime) * 100));
+	});
+
+	let generatingProgress = $derived.by(() => {
+		if (!generatingStartTime || !$resultsStore.isGenerating) return 0;
+		const elapsed = (currentTime - generatingStartTime) / 1000;
+		const estimatedTime = 60; // LLM takes ~60 seconds
+		return Math.min(95, Math.round((elapsed / estimatedTime) * 100));
+	});
+
 	// Computed status
 	let processingStatus = $derived.by(() => {
 		if (recordingsLoading) return 'loading';
@@ -96,6 +118,11 @@
 			// Trigger STT processing
 			await api.post(`/recordings/${uploadedRecording.id}/process`, {});
 			toast.success('음성 변환을 시작했습니다.');
+
+			// Start progress tracking
+			sttStartTime = Date.now();
+			startProgressUpdate();
+
 			// Reload status
 			await loadRecordingsStatus();
 
@@ -243,11 +270,18 @@
 
 		// Start polling if processing or just uploaded (auto-STT may be running)
 		if (processingStatus === 'processing' || processingStatus === 'uploaded') {
+			// Start progress tracking for STT
+			if (processingStatus === 'processing') {
+				sttStartTime = Date.now();
+				startProgressUpdate();
+			}
+
 			statusPollInterval = setInterval(async () => {
 				await loadRecordingsStatus();
 				// Check if all recordings are completed (ready state)
 				const allCompleted = recordings.length > 0 && recordings.every(r => r.status === 'completed');
 				if (allCompleted) {
+					stopProgressUpdate();
 					await resultsStore.loadTranscript(meetingId);
 					toast.success('변환 완료! 회의록을 생성할 수 있습니다.');
 					if (statusPollInterval) {
@@ -274,10 +308,33 @@
 		if (statusPollInterval) {
 			clearInterval(statusPollInterval);
 		}
+		stopProgressUpdate();
 	});
 
+	function startProgressUpdate() {
+		if (progressUpdateInterval) return;
+		progressUpdateInterval = setInterval(() => {
+			currentTime = Date.now();
+		}, 500); // Update every 500ms for smooth progress
+	}
+
+	function stopProgressUpdate() {
+		if (progressUpdateInterval) {
+			clearInterval(progressUpdateInterval);
+			progressUpdateInterval = null;
+		}
+		sttStartTime = null;
+		generatingStartTime = null;
+	}
+
 	async function handleGenerate() {
-		await resultsStore.generateResult(meetingId);
+		generatingStartTime = Date.now();
+		startProgressUpdate();
+		try {
+			await resultsStore.generateResult(meetingId);
+		} finally {
+			stopProgressUpdate();
+		}
 	}
 
 	async function handleRegenerate() {
@@ -409,16 +466,21 @@
 			<div class="generating-banner">
 				<div class="flex items-center gap-3">
 					<Loader2 class="w-5 h-5 animate-spin text-blue-500" />
-					<div>
-						<p class="font-medium text-gray-800">AI가 회의록을 생성하고 있습니다...</p>
+					<div class="flex-1">
+						<div class="flex items-center justify-between">
+							<p class="font-medium text-gray-800">AI가 회의록을 생성하고 있습니다...</p>
+							<span class="text-sm font-semibold text-blue-600">{generatingProgress}%</span>
+						</div>
 						<p class="text-sm text-gray-500">
 							안건, 대화 내용, 메모를 분석하여 요약 및 실행 항목을 추출합니다.
-							보통 1-2분 정도 소요됩니다.
 						</p>
 					</div>
 				</div>
-				<div class="mt-3 w-full bg-gray-200 rounded-full h-2">
-					<div class="bg-blue-500 h-2 rounded-full animate-pulse" style="width: 60%"></div>
+				<div class="mt-3 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+					<div
+						class="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
+						style="width: {generatingProgress}%"
+					></div>
 				</div>
 			</div>
 		{/if}
@@ -426,7 +488,7 @@
 		<!-- Recordings List (always visible when there are recordings) -->
 		{#if recordings.length > 0}
 			<div class="recordings-section">
-				<RecordingsList {recordings} loading={recordingsLoading} />
+				<RecordingsList {recordings} loading={recordingsLoading} sttProgress={sttProgress} />
 			</div>
 		{/if}
 

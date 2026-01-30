@@ -447,24 +447,10 @@
 		<LoadingSpinner size="lg" />
 	</div>
 {:else}
-	<!-- Compact Recording Bar -->
-	<CompactRecordingBar
-		isRecording={$isRecording}
-		isPaused={$isPaused}
-		recordingTime={$recordingTime}
-		currentAgenda={meeting.agendas[currentAgendaIndex]?.title || ''}
-		visualizationData={$visualizationStore.analyserData}
-		onStart={handleStartRecording}
-		onStop={handleStopRecording}
-		onPause={handlePauseRecording}
-		onResume={handleResumeRecording}
-		onFinishMeeting={handleFinishMeeting}
-	/>
-
-	<!-- Main content area (below nav + recording bar) -->
-	<div class="pt-[120px]">
+	<!-- Main content area (below nav) -->
+	<div class="pt-16 h-screen flex flex-col">
 		<!-- Breadcrumb + Hint -->
-		<div class="px-4 py-3 border-b bg-white">
+		<div class="px-4 py-3 border-b bg-white flex-shrink-0">
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-4">
 					<Breadcrumb items={breadcrumbItems} />
@@ -496,38 +482,58 @@
 			</div>
 		</div>
 
-		<!-- Split layout (100vh - nav 64px - bar 56px - breadcrumb 52px) -->
-		<div class="flex h-[calc(100vh-172px)]">
+		<!-- Recording Bar (inside meeting area, at top) -->
+		<div class="flex-shrink-0 border-b">
+			<CompactRecordingBar
+				isRecording={$isRecording}
+				isPaused={$isPaused}
+				recordingTime={$recordingTime}
+				currentAgenda={meeting.agendas[currentAgendaIndex]?.title || ''}
+				visualizationData={$visualizationStore.analyserData}
+				onStart={handleStartRecording}
+				onStop={handleStopRecording}
+				onPause={handlePauseRecording}
+				onResume={handleResumeRecording}
+				onFinishMeeting={handleFinishMeeting}
+			/>
+		</div>
+
+		<!-- Split layout (fills remaining space) -->
+		<div class="flex flex-1 min-h-0">
 			<!-- Left: Agenda Panel (25%) -->
-			<div class="w-1/4 min-w-64 max-w-80 border-r">
-				<AgendaNotePanel
-					agendas={meeting.agendas}
-					bind:currentAgendaIndex
-					notes={agendaNotes}
-					recordingTime={$recordingTime}
-					isRecording={$isRecording}
-					onAgendaChange={handleAgendaChange}
-					onChildAgendaChange={handleChildAgendaChange}
-					onQuestionToggle={handleQuestionToggle}
-					onNoteChange={handleNoteChange}
-				/>
+			<div class="w-1/4 min-w-64 max-w-80 border-r flex flex-col">
+				<div class="flex-1 overflow-auto">
+					<AgendaNotePanel
+						agendas={meeting.agendas}
+						bind:currentAgendaIndex
+						notes={agendaNotes}
+						recordingTime={$recordingTime}
+						isRecording={$isRecording}
+						onAgendaChange={handleAgendaChange}
+						onChildAgendaChange={handleChildAgendaChange}
+						onQuestionToggle={handleQuestionToggle}
+						onNoteChange={handleNoteChange}
+					/>
+				</div>
 			</div>
 
 			<!-- Right: Note/Sketch Area (75%) -->
-			<div class="flex-1">
-				<NoteSketchArea
-					bind:activeTab
-					textContent={agendaNotes.get(meeting.agendas[currentAgendaIndex]?.id) || ''}
-					sketchSnapshot={agendaSketches.get(meeting.agendas[currentAgendaIndex]?.id)}
-					onTabChange={handleTabChange}
-					onTextChange={(content) => {
-					const agenda = meeting?.agendas?.[currentAgendaIndex];
-					if (agenda?.id) {
-						handleNoteChange(agenda.id, content);
-					}
-				}}
-					onSketchChange={handleSketchChange}
-				/>
+			<div class="flex-1 flex flex-col min-h-0">
+				<div class="flex-1 min-h-0 overflow-hidden">
+					<NoteSketchArea
+						bind:activeTab
+						textContent={agendaNotes.get(meeting.agendas[currentAgendaIndex]?.id) || ''}
+						sketchSnapshot={agendaSketches.get(meeting.agendas[currentAgendaIndex]?.id)}
+						onTabChange={handleTabChange}
+						onTextChange={(content) => {
+						const agenda = meeting?.agendas?.[currentAgendaIndex];
+						if (agenda?.id) {
+							handleNoteChange(agenda.id, content);
+						}
+					}}
+						onSketchChange={handleSketchChange}
+					/>
+				</div>
 			</div>
 		</div>
 	</div>

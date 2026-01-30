@@ -18,9 +18,13 @@
 	interface Props {
 		recordings: Recording[];
 		loading?: boolean;
+		sttProgress?: number;
 	}
 
-	let { recordings = [], loading = false }: Props = $props();
+	let { recordings = [], loading = false, sttProgress = 0 }: Props = $props();
+
+	// Check if any recording is processing
+	let isProcessing = $derived(recordings.some(r => r.status === 'processing'));
 
 	function formatDuration(seconds: number | null): string {
 		if (seconds === null || seconds === undefined) return '--:--';
@@ -71,6 +75,19 @@
 			<span class="count">{recordings.length}개</span>
 		{/if}
 	</div>
+
+	<!-- STT Progress Bar (when processing) -->
+	{#if isProcessing && sttProgress > 0}
+		<div class="progress-section">
+			<div class="progress-header">
+				<span class="progress-label">음성 → 텍스트 변환 중...</span>
+				<span class="progress-value">{sttProgress}%</span>
+			</div>
+			<div class="progress-bar-bg">
+				<div class="progress-bar-fill" style="width: {sttProgress}%"></div>
+			</div>
+		</div>
+	{/if}
 
 	{#if loading}
 		<div class="loading">
@@ -243,5 +260,44 @@
 		background: #fef2f2;
 		padding: 0.25rem 0.5rem;
 		border-radius: 0.25rem;
+	}
+
+	.progress-section {
+		padding: 0.75rem 1rem;
+		background: #fffbeb;
+		border-bottom: 1px solid #fef3c7;
+	}
+
+	.progress-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.5rem;
+	}
+
+	.progress-label {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #92400e;
+	}
+
+	.progress-value {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: #d97706;
+	}
+
+	.progress-bar-bg {
+		height: 0.5rem;
+		background: #fef3c7;
+		border-radius: 0.25rem;
+		overflow: hidden;
+	}
+
+	.progress-bar-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #f59e0b, #d97706);
+		border-radius: 0.25rem;
+		transition: width 0.5s ease-out;
 	}
 </style>
