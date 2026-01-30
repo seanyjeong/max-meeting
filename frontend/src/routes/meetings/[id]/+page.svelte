@@ -102,11 +102,15 @@
 	async function finishMeeting() {
 		if (!$currentMeeting) return;
 
+		console.log('[meeting] Finishing meeting:', meetingId);
 		try {
-			await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
+			const response = await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
+			console.log('[meeting] Meeting finished, response:', response);
+			// Update local state
+			$currentMeeting = { ...$currentMeeting, status: 'completed' };
 			goto(`/meetings/${meetingId}/results`);
 		} catch (err) {
-			console.error('Failed to finish meeting:', err);
+			console.error('[meeting] Failed to finish meeting:', err);
 		}
 	}
 

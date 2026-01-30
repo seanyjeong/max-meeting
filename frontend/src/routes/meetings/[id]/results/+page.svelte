@@ -17,15 +17,20 @@
 	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio, Mic, Loader2 } from 'lucide-svelte';
 	import type { MeetingDetail } from '$lib/stores/meeting';
 
-	// Recording status types
+	// Recording status types (matches backend RecordingResponse)
 	interface Recording {
 		id: number;
-		filename?: string;
+		meeting_id: number;
+		original_filename: string | null;
+		safe_filename: string;
+		mime_type: string;
+		format: string;
+		duration_seconds: number | null;
+		file_size_bytes: number | null;
 		status: 'pending' | 'uploaded' | 'processing' | 'completed' | 'failed';
-		duration?: number;
-		file_size?: number;
+		error_message: string | null;
+		retry_count: number;
 		created_at: string;
-		error_message?: string | null;
 	}
 
 	let meetingId = $derived(parseInt($page.params.id ?? '0'));
@@ -249,8 +254,19 @@
 						clearInterval(statusPollInterval);
 						statusPollInterval = null;
 					}
+					// Auto-generate meeting result if not exists
+					if (!$hasResult) {
+						await handleGenerate();
+					}
 				}
 			}, 3000); // Poll every 3 seconds
+		}
+
+		// Auto-generate meeting result if meeting is completed and no result exists
+		// (for cases where user finished meeting without recording)
+		if ($currentMeeting?.status === 'completed' && !$hasResult && processingStatus === 'no_recordings') {
+			console.log('[results] Auto-generating meeting result (no recordings)');
+			await handleGenerate();
 		}
 	});
 

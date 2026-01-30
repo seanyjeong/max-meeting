@@ -322,16 +322,20 @@
 	}
 
 	async function handleFinishMeeting() {
+		console.log('[record] Finishing meeting:', meetingId);
+
 		// Save notes first
 		await notesStore.forceSave();
+		console.log('[record] Notes saved');
 
 		// Update meeting status to completed
 		try {
-			await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
-			toast.success('회의가 마무리되었습니다.');
+			const response = await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
+			console.log('[record] Meeting finished, response:', response);
+			toast.success('회의가 마무리되었습니다. 회의록을 생성합니다...');
 			goto(`/meetings/${meetingId}/results`);
 		} catch (error) {
-			console.error('Failed to finish meeting:', error);
+			console.error('[record] Failed to finish meeting:', error);
 			toast.error('회의 마무리에 실패했습니다.');
 		}
 	}

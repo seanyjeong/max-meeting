@@ -6,12 +6,13 @@
 
 	interface Recording {
 		id: number;
-		filename?: string;
+		original_filename: string | null;
+		safe_filename: string;
 		status: 'pending' | 'uploaded' | 'processing' | 'completed' | 'failed';
-		duration?: number;
-		file_size?: number;
+		duration_seconds: number | null;
+		file_size_bytes: number | null;
 		created_at: string;
-		error_message?: string | null;
+		error_message: string | null;
 	}
 
 	interface Props {
@@ -21,15 +22,15 @@
 
 	let { recordings = [], loading = false }: Props = $props();
 
-	function formatDuration(seconds?: number): string {
-		if (!seconds) return '--:--';
+	function formatDuration(seconds: number | null): string {
+		if (seconds === null || seconds === undefined) return '--:--';
 		const mins = Math.floor(seconds / 60);
 		const secs = Math.floor(seconds % 60);
 		return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 	}
 
-	function formatFileSize(bytes?: number): string {
-		if (!bytes) return '-';
+	function formatFileSize(bytes: number | null): string {
+		if (bytes === null || bytes === undefined) return '-';
 		if (bytes < 1024) return `${bytes} B`;
 		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -92,7 +93,7 @@
 						</div>
 						<div class="item-info">
 							<div class="item-row">
-								<span class="filename">{recording.filename || `녹음 ${recording.id}`}</span>
+								<span class="filename">{recording.original_filename || recording.safe_filename || `녹음 ${recording.id}`}</span>
 								<span class="status-badge {config.color}">{config.label}</span>
 							</div>
 							<div class="item-meta">
@@ -100,14 +101,14 @@
 									<Clock class="w-3 h-3" />
 									{formatDate(recording.created_at)}
 								</span>
-								{#if recording.duration}
+								{#if recording.duration_seconds}
 									<span class="meta-item">
-										{formatDuration(recording.duration)}
+										{formatDuration(recording.duration_seconds)}
 									</span>
 								{/if}
-								{#if recording.file_size}
+								{#if recording.file_size_bytes}
 									<span class="meta-item">
-										{formatFileSize(recording.file_size)}
+										{formatFileSize(recording.file_size_bytes)}
 									</span>
 								{/if}
 							</div>
