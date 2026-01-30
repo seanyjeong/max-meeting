@@ -413,7 +413,6 @@ def process_recording(
                 task_id=self.request.id,
                 task_type="stt",
                 recording_id=recording_id,
-                meeting_id=recording.meeting_id,
                 status=TaskStatusEnum.PROCESSING,
                 started_at=datetime.now(timezone.utc),
             )

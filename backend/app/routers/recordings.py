@@ -46,6 +46,24 @@ ALLOWED_MIME_TYPES = {
 # ============================================
 
 
+@router.get("/meetings/{meeting_id}/recordings")
+async def list_recordings(
+    meeting_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Get all recordings for a meeting with their processing status."""
+    service = RecordingService(db)
+    try:
+        recordings = await service.get_recordings_by_meeting(meeting_id)
+        return {
+            "data": [RecordingResponse.model_validate(r) for r in recordings],
+            "meta": {"total": len(recordings)}
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 @router.post(
     "/meetings/{meeting_id}/recordings",
     response_model=UploadInitResponse,
@@ -107,6 +125,38 @@ async def delete_recording(
     service = RecordingService(db)
     try:
         await service.delete_recording(recording_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/recordings/{recording_id}/process")
+async def trigger_stt_processing(
+    recording_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Manually trigger STT processing for a recording."""
+    service = RecordingService(db)
+    try:
+        recording = await service.get_recording_or_raise(recording_id)
+
+        # Check if recording is in uploaded status
+        if recording.status != RecordingStatus.UPLOADED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Recording is not ready for processing (status: {recording.status})"
+            )
+
+        # Update status to processing
+        recording.status = RecordingStatus.PROCESSING
+        await db.commit()
+
+        # Trigger STT processing
+        from workers.tasks.stt import process_recording
+        process_recording.delay(recording_id)
+        logger.info(f"STT processing triggered for recording {recording_id}")
+
+        return {"message": "STT processing started", "recording_id": recording_id}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

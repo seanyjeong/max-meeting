@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Breadcrumb, Button, Card, LoadingSpinner, Badge } from '$lib/components';
@@ -13,13 +13,86 @@
 	import { toast } from '$lib/stores/toast';
 	import { api } from '$lib/api';
 	import { exportToPdf, copyToClipboard } from '$lib/utils/exportPdf';
-	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio } from 'lucide-svelte';
+	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio, Mic, Loader2 } from 'lucide-svelte';
 	import type { MeetingDetail } from '$lib/stores/meeting';
+
+	// Recording status types
+	interface Recording {
+		id: number;
+		status: 'pending' | 'uploaded' | 'processing' | 'completed' | 'failed';
+		error_message?: string | null;
+	}
 
 	let meetingId = $derived(parseInt($page.params.id ?? '0'));
 	let activeTab = $state<'summary' | 'actions' | 'transcript'>('summary');
 	let speakerMapping = $state<Record<string, number>>({});
 	let showShortcutsHelp = $state(false);
+
+	// Recording status state
+	let recordings = $state<Recording[]>([]);
+	let recordingsLoading = $state(true);
+	let statusPollInterval: ReturnType<typeof setInterval> | null = null;
+
+	// Computed status
+	let processingStatus = $derived.by(() => {
+		if (recordingsLoading) return 'loading';
+		if (recordings.length === 0) return 'no_recordings';
+
+		const hasProcessing = recordings.some(r => r.status === 'processing');
+		const hasUploaded = recordings.some(r => r.status === 'uploaded');
+		const hasCompleted = recordings.some(r => r.status === 'completed');
+		const hasFailed = recordings.some(r => r.status === 'failed');
+
+		if (hasProcessing) return 'processing';
+		if (hasUploaded) return 'uploaded';
+		if (hasFailed && !hasCompleted) return 'failed';
+		if (hasCompleted) return 'ready';
+		return 'unknown';
+	});
+
+	// Status messages for users
+	const statusMessages: Record<string, { title: string; description: string; color: string }> = {
+		loading: { title: '상태 확인 중...', description: '', color: 'gray' },
+		no_recordings: { title: '녹음이 없습니다', description: '회의를 녹음한 후 결과를 확인할 수 있습니다.', color: 'gray' },
+		uploaded: { title: '녹음 업로드 완료', description: '음성을 텍스트로 변환하려면 아래 버튼을 눌러주세요.', color: 'blue' },
+		processing: { title: '음성을 텍스트로 변환 중...', description: '잠시만 기다려주세요. 완료되면 자동으로 업데이트됩니다.', color: 'yellow' },
+		ready: { title: '변환 완료!', description: '회의록을 생성할 수 있습니다.', color: 'green' },
+		failed: { title: '변환 실패', description: '녹음 변환 중 오류가 발생했습니다. 다시 시도해주세요.', color: 'red' },
+		unknown: { title: '상태 확인 필요', description: '녹음 상태를 확인할 수 없습니다.', color: 'gray' }
+	};
+
+	async function loadRecordingsStatus() {
+		try {
+			const response = await api.get<{ data: Recording[]; meta: { total: number } }>(
+				`/meetings/${meetingId}/recordings`
+			);
+			recordings = response.data;
+		} catch (error) {
+			console.error('Failed to load recordings status:', error);
+		} finally {
+			recordingsLoading = false;
+		}
+	}
+
+	async function triggerSTT() {
+		// Find the most recent uploaded recording
+		const uploadedRecording = recordings.find(r => r.status === 'uploaded');
+		if (!uploadedRecording) {
+			toast.error('변환할 녹음이 없습니다.');
+			return;
+		}
+
+		try {
+			// Trigger STT processing
+			await api.post(`/recordings/${uploadedRecording.id}/process`, {});
+			toast.success('음성 변환을 시작했습니다.');
+			// Reload status
+			await loadRecordingsStatus();
+		} catch (error) {
+			console.error('Failed to trigger STT:', error);
+			toast.error('변환 시작에 실패했습니다.');
+		}
+	}
 
 	// Tab configuration
 	const tabConfig = $derived([
@@ -134,12 +207,34 @@
 			})()
 			: Promise.resolve();
 
-		// Load results and transcript in parallel with meeting
+		// Load results, transcript, and recordings status in parallel
 		await Promise.all([
 			meetingPromise,
 			resultsStore.loadResult(meetingId),
-			resultsStore.loadTranscript(meetingId)
+			resultsStore.loadTranscript(meetingId),
+			loadRecordingsStatus()
 		]);
+
+		// Start polling if processing
+		if (processingStatus === 'processing') {
+			statusPollInterval = setInterval(async () => {
+				await loadRecordingsStatus();
+				// Also reload transcript when processing completes
+				if (processingStatus === 'ready') {
+					await resultsStore.loadTranscript(meetingId);
+					if (statusPollInterval) {
+						clearInterval(statusPollInterval);
+						statusPollInterval = null;
+					}
+				}
+			}, 5000); // Poll every 5 seconds
+		}
+	});
+
+	onDestroy(() => {
+		if (statusPollInterval) {
+			clearInterval(statusPollInterval);
+		}
 	});
 
 	async function handleGenerate() {
@@ -369,19 +464,75 @@
 					{/if}
 				</div>
 			{:else}
-				<!-- No results state -->
+				<!-- No results state - Show recording/processing status -->
 				<Card>
 					{#snippet children()}
 						<div class="empty-state">
-							<svg class="w-16 h-16 mx-auto text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-							</svg>
-							<h3>아직 결과가 없습니다</h3>
-							<p>회의 결과는 녹음과 노트로부터 생성됩니다.</p>
-							<p class="text-sm text-gray-500">결과를 생성하기 전에 녹음이 처리되었는지 확인하세요.</p>
-							<Button variant="primary" onclick={handleGenerate} loading={$resultsStore.isGenerating}>
-								{#snippet children()}결과 생성{/snippet}
-							</Button>
+							{#if processingStatus === 'no_recordings'}
+								<!-- No recordings -->
+								<Mic class="w-16 h-16 mx-auto text-gray-300" />
+								<h3>{statusMessages.no_recordings.title}</h3>
+								<p>{statusMessages.no_recordings.description}</p>
+								<Button variant="primary" onclick={() => goto(`/meetings/${meetingId}/record`)}>
+									{#snippet children()}
+										<Mic class="w-4 h-4 mr-1" />
+										녹음 시작
+									{/snippet}
+								</Button>
+							{:else if processingStatus === 'uploaded'}
+								<!-- Uploaded but not processed -->
+								<FileAudio class="w-16 h-16 mx-auto text-blue-400" />
+								<h3>{statusMessages.uploaded.title}</h3>
+								<p>{statusMessages.uploaded.description}</p>
+								<Button variant="primary" onclick={triggerSTT}>
+									{#snippet children()}
+										<RefreshCw class="w-4 h-4 mr-1" />
+										텍스트 변환 시작
+									{/snippet}
+								</Button>
+							{:else if processingStatus === 'processing'}
+								<!-- Processing STT -->
+								<div class="processing-animation">
+									<Loader2 class="w-16 h-16 mx-auto text-yellow-500 animate-spin" />
+								</div>
+								<h3>{statusMessages.processing.title}</h3>
+								<p>{statusMessages.processing.description}</p>
+								<div class="text-sm text-gray-400 mt-2">
+									자동으로 새로고침됩니다...
+								</div>
+							{:else if processingStatus === 'ready'}
+								<!-- Ready to generate -->
+								<svg class="w-16 h-16 mx-auto text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+								</svg>
+								<h3>{statusMessages.ready.title}</h3>
+								<p>{statusMessages.ready.description}</p>
+								<Button variant="primary" onclick={handleGenerate} loading={$resultsStore.isGenerating}>
+									{#snippet children()}
+										<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+										</svg>
+										회의록 생성
+									{/snippet}
+								</Button>
+							{:else if processingStatus === 'failed'}
+								<!-- Failed -->
+								<svg class="w-16 h-16 mx-auto text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+								</svg>
+								<h3>{statusMessages.failed.title}</h3>
+								<p>{statusMessages.failed.description}</p>
+								<Button variant="primary" onclick={triggerSTT}>
+									{#snippet children()}
+										<RefreshCw class="w-4 h-4 mr-1" />
+										다시 시도
+									{/snippet}
+								</Button>
+							{:else}
+								<!-- Loading or unknown -->
+								<LoadingSpinner />
+								<h3>상태 확인 중...</h3>
+							{/if}
 						</div>
 					{/snippet}
 				</Card>

@@ -36,57 +36,57 @@ class Agenda(Base, CreatedAtMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     started_at_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # Relationships
+    # Relationships - use lazy="noload" by default to prevent recursive loading
     meeting: Mapped["Meeting"] = relationship(
         "Meeting",
         back_populates="agendas",
-        lazy="joined",
+        lazy="noload",
     )
     parent: Mapped["Agenda | None"] = relationship(
         "Agenda",
         remote_side=[id],
         back_populates="children",
-        lazy="joined",
+        lazy="noload",
     )
     children: Mapped[list["Agenda"]] = relationship(
         "Agenda",
         back_populates="parent",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
         order_by="Agenda.order_num",
     )
     questions: Mapped[list["AgendaQuestion"]] = relationship(
         "AgendaQuestion",
         back_populates="agenda",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
         order_by="AgendaQuestion.order_num",
     )
     manual_notes: Mapped[list["ManualNote"]] = relationship(
         "ManualNote",
         back_populates="agenda",
-        lazy="selectin",
+        lazy="noload",
     )
     sketches: Mapped[list["Sketch"]] = relationship(
         "Sketch",
         back_populates="agenda",
-        lazy="selectin",
+        lazy="noload",
     )
     discussions: Mapped[list["AgendaDiscussion"]] = relationship(
         "AgendaDiscussion",
         back_populates="agenda",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
     decisions: Mapped[list["MeetingDecision"]] = relationship(
         "MeetingDecision",
         back_populates="agenda",
-        lazy="selectin",
+        lazy="noload",
     )
     action_items: Mapped[list["ActionItem"]] = relationship(
         "ActionItem",
         back_populates="agenda",
-        lazy="selectin",
+        lazy="noload",
     )
 
     @property

@@ -237,7 +237,8 @@ function createResultsStore() {
 			}
 
 			const response = await api.post<MeetingResult>(
-				`/results/${resultId}/regenerate`
+				`/results/${resultId}/regenerate`,
+				{}
 			);
 
 			update((state) => ({

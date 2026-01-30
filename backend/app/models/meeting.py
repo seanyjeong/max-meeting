@@ -40,7 +40,7 @@ class MeetingType(Base, TimestampMixin, SoftDeleteMixin):
     meetings: Mapped[list["Meeting"]] = relationship(
         "Meeting",
         back_populates="meeting_type",
-        lazy="selectin",
+        lazy="noload",
     )
 
     def __repr__(self) -> str:
@@ -77,59 +77,59 @@ class Meeting(Base, TimestampMixin, SoftDeleteMixin):
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
 
-    # Relationships
+    # Relationships - use lazy="noload" to prevent automatic loading
     meeting_type: Mapped["MeetingType"] = relationship(
         "MeetingType",
         back_populates="meetings",
-        lazy="joined",
+        lazy="noload",
     )
     attendees: Mapped[list["MeetingAttendee"]] = relationship(
         "MeetingAttendee",
         back_populates="meeting",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
     agendas: Mapped[list["Agenda"]] = relationship(
         "Agenda",
         back_populates="meeting",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
         order_by="Agenda.order_num",
     )
     recordings: Mapped[list["Recording"]] = relationship(
         "Recording",
         back_populates="meeting",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
     transcripts: Mapped[list["Transcript"]] = relationship(
         "Transcript",
         back_populates="meeting",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
     manual_notes: Mapped[list["ManualNote"]] = relationship(
         "ManualNote",
         back_populates="meeting",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
     sketches: Mapped[list["Sketch"]] = relationship(
         "Sketch",
         back_populates="meeting",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
     results: Mapped[list["MeetingResult"]] = relationship(
         "MeetingResult",
         back_populates="meeting",
         cascade="all, delete-orphan",
-        lazy="selectin",
+        lazy="noload",
     )
     action_items: Mapped[list["ActionItem"]] = relationship(
         "ActionItem",
         back_populates="meeting",
-        lazy="selectin",
+        lazy="noload",
     )
 
     def __repr__(self) -> str:

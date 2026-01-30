@@ -116,6 +116,23 @@ class RecordingService:
             include_transcripts=include_transcripts,
         )
 
+    async def get_recordings_by_meeting(self, meeting_id: int) -> list[Recording]:
+        """Get all recordings for a meeting."""
+        # Verify meeting exists
+        await self.get_meeting_or_raise(meeting_id)
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        stmt = (
+            select(Recording)
+            .where(Recording.meeting_id == meeting_id)
+            .options(selectinload(Recording.transcripts))
+            .order_by(Recording.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
     async def update_recording(
         self,
         recording_id: int,
