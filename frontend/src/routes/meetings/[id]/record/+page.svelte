@@ -316,14 +316,19 @@
 
 	// 자식안건 타임스탬프 핸들러
 	async function handleChildAgendaChange(prevId: number | null, childId: number, currentTime: number) {
+		console.log('[record] handleChildAgendaChange:', { prevId, childId, currentTime });
+
 		// Close previous segment (대안건 또는 자식안건)
 		if (prevId !== null && prevId !== childId) {
+			console.log('[record] Closing previous segment:', prevId);
 			await closeSegment(prevId, currentTime);
 		}
 
 		// Open new segment for child
+		console.log('[record] Opening new segment for child:', childId);
 		await openSegment(childId, currentTime);
 		activeAgendaId = childId;
+		console.log('[record] activeAgendaId set to:', activeAgendaId);
 	}
 
 	// 안건 찾기 (대안건, 자식안건, 하하위안건)
@@ -375,15 +380,25 @@
 	}
 
 	async function openSegment(agendaId: number, startTime: number) {
-		if (!meeting) return;
+		console.log('[record] openSegment called:', { agendaId, startTime });
+		if (!meeting) {
+			console.log('[record] openSegment: no meeting');
+			return;
+		}
 
 		const agenda = findAgendaById(agendaId);
-		if (!agenda) return;
+		console.log('[record] openSegment: found agenda:', agenda?.title, 'id:', agenda?.id);
+		if (!agenda) {
+			console.log('[record] openSegment: agenda not found for id:', agendaId);
+			return;
+		}
 
 		const segments = [...(agenda.time_segments || [])];
 		segments.push({ start: startTime, end: null });
+		console.log('[record] openSegment: new segments:', segments);
 
 		try {
+			console.log('[record] openSegment: calling API PATCH for agenda:', agendaId);
 			await api.patch(`/agendas/${agendaId}`, {
 				time_segments: segments,
 				started_at_seconds: segments[0].start,
@@ -394,6 +409,7 @@
 				started_at_seconds: segments[0].start,
 				status: 'in_progress' as const
 			});
+			console.log('[record] openSegment: success');
 		} catch (error) {
 			console.error('Failed to open segment:', error);
 		}

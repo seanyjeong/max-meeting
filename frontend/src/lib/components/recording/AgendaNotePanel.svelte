@@ -116,13 +116,17 @@
 	}
 
 	function goToAgenda(index: number) {
+		console.log('[AgendaNotePanel] goToAgenda called:', { index, currentAgendaIndex, isRecording, recordingTime });
 		if (index >= 0 && index < agendas.length && index !== currentAgendaIndex) {
 			const prevAgenda = agendas[currentAgendaIndex];
 			const targetAgenda = agendas[index];
 
 			// 녹음 중일 때만 time_segments 처리
 			if (isRecording) {
+				console.log('[AgendaNotePanel] Recording active - calling onAgendaChange');
 				onAgendaChange(activeChildId ?? prevAgenda?.id ?? null, targetAgenda.id, recordingTime);
+			} else {
+				console.log('[AgendaNotePanel] NOT recording - skipping time_segments');
 			}
 
 			currentAgendaIndex = index;
@@ -132,14 +136,28 @@
 
 	function goToChildAgenda(parentIndex: number, childId: number) {
 		const parentAgenda = agendas[parentIndex];
+		console.log('[AgendaNotePanel] goToChildAgenda called:', {
+			parentIndex,
+			childId,
+			currentAgendaIndex,
+			activeChildId,
+			isRecording,
+			recordingTime
+		});
 
 		// 같은 자식안건이면 무시
-		if (activeChildId === childId && currentAgendaIndex === parentIndex) return;
+		if (activeChildId === childId && currentAgendaIndex === parentIndex) {
+			console.log('[AgendaNotePanel] Same child - ignoring');
+			return;
+		}
 
 		// 녹음 중일 때만 time_segments 처리
 		if (isRecording && onChildAgendaChange) {
 			const prevId = activeChildId ?? agendas[currentAgendaIndex]?.id ?? null;
+			console.log('[AgendaNotePanel] Recording active - calling onChildAgendaChange:', { prevId, childId, recordingTime });
 			onChildAgendaChange(prevId, childId, recordingTime);
+		} else {
+			console.log('[AgendaNotePanel] NOT recording or no handler - skipping');
 		}
 
 		currentAgendaIndex = parentIndex;
