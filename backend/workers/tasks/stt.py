@@ -577,11 +577,45 @@ def process_recording(
                     raise ValueError(f"Recording {recording_id} not found")
 
                 # Create transcript record
+                # Get meeting context for transcript refinement
+                from sqlalchemy import select
+                from app.models.meeting import Meeting
+                from app.models.agenda import Agenda
+                from app.services.llm import refine_transcript
+
+                meeting_result = await session.execute(
+                    select(Meeting).where(Meeting.id == recording.meeting_id)
+                )
+                meeting = meeting_result.scalar_one_or_none()
+
+                agendas_result = await session.execute(
+                    select(Agenda).where(Agenda.meeting_id == recording.meeting_id)
+                )
+                agendas = agendas_result.scalars().all()
+
+                # Refine transcript with LLM
+                agenda_titles = [a.title for a in agendas] if agendas else []
+                attendee_names = []  # TODO: get from meeting_attendees
+
+                try:
+                    logger.info(f"Refining transcript with LLM for recording {recording_id}")
+                    refined_segments = await refine_transcript(
+                        segments=combined_result["segments"],
+                        agenda_titles=agenda_titles,
+                        attendee_names=attendee_names,
+                        meeting_title=meeting.title if meeting else None,
+                    )
+                    final_segments = refined_segments
+                    logger.info(f"Transcript refined successfully: {len(final_segments)} segments")
+                except Exception as e:
+                    logger.warning(f"Transcript refinement failed, using original: {e}")
+                    final_segments = combined_result["segments"]
+
                 transcript = Transcript(
                     recording_id=recording_id,
                     meeting_id=recording.meeting_id,
                     chunk_index=0,
-                    segments=combined_result["segments"],
+                    segments=final_segments,
                 )
                 session.add(transcript)
 

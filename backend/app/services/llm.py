@@ -591,3 +591,114 @@ async def generate_questions(
         context=context,
         num_questions=num_questions,
     )
+
+
+async def refine_transcript(
+    segments: list[dict[str, Any]],
+    agenda_titles: list[str],
+    attendee_names: list[str] | None = None,
+    meeting_title: str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Refine STT transcript using LLM.
+
+    Improves accuracy by:
+    - Correcting proper nouns based on agenda context
+    - Matching speakers to attendee names
+    - Fixing obvious transcription errors
+    - Improving sentence structure
+    """
+    service = get_llm_service()
+
+    # Build context string
+    context_parts = []
+    if meeting_title:
+        context_parts.append(f"회의 제목: {meeting_title}")
+    if agenda_titles:
+        context_parts.append(f"안건: {', '.join(agenda_titles)}")
+    if attendee_names:
+        context_parts.append(f"참석자: {', '.join(attendee_names)}")
+
+    context = "\n".join(context_parts)
+
+    # Build transcript text from segments
+    transcript_lines = []
+    for seg in segments:
+        speaker = seg.get("speaker") or "화자"
+        text = seg.get("text", "")
+        transcript_lines.append(f"[{speaker}] {text}")
+
+    transcript_text = "\n".join(transcript_lines)
+
+    prompt = f"""다음은 회의 음성을 텍스트로 변환한 결과입니다. 아래 맥락 정보를 참고하여 전사록을 교정해주세요.
+
+## 맥락 정보
+{context}
+
+## 교정 지침
+1. 고유명사(인명, 기관명, 전문 용어)를 맥락에 맞게 교정
+2. 문맥상 어색한 단어나 문장을 자연스럽게 수정
+3. 동음이의어 오류 수정 (예: "종라원" → "정노원" 등)
+4. 원래 의미를 유지하면서 명확하게 교정
+
+## 원본 전사록
+{transcript_text}
+
+## 출력 형식
+각 발화를 줄바꿈으로 구분하여 교정된 텍스트만 출력하세요.
+[화자] 교정된 텍스트
+형식으로 출력하세요.
+"""
+
+    try:
+        refined_text = await service.generate_text(
+            prompt=prompt,
+            temperature=0.3,  # 낮은 temperature로 일관성 유지
+            max_tokens=4096,
+        )
+
+        # Parse refined text back to segments
+        refined_segments = []
+        lines = refined_text.strip().split("\n")
+
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+
+            # Parse [speaker] text format
+            if line.startswith("[") and "]" in line:
+                bracket_end = line.index("]")
+                speaker = line[1:bracket_end]
+                text = line[bracket_end + 1:].strip()
+            else:
+                speaker = None
+                text = line
+
+            # Match with original segment timing if available
+            if i < len(segments):
+                orig = segments[i]
+                refined_segments.append({
+                    "start": orig.get("start", 0),
+                    "end": orig.get("end", 0),
+                    "text": text,
+                    "speaker": speaker,
+                    "confidence": orig.get("confidence"),
+                    "refined": True,
+                })
+            else:
+                refined_segments.append({
+                    "start": 0,
+                    "end": 0,
+                    "text": text,
+                    "speaker": speaker,
+                    "refined": True,
+                })
+
+        logger.info(f"Transcript refined: {len(segments)} -> {len(refined_segments)} segments")
+        return refined_segments
+
+    except Exception as e:
+        logger.error(f"Failed to refine transcript: {e}")
+        # Return original segments on failure
+        return segments
