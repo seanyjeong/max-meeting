@@ -2,11 +2,10 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, SoftDeleteMixin
-from app.models.enums import AgendaStatus
 
 if TYPE_CHECKING:
     from app.models.meeting import Meeting
@@ -34,10 +33,7 @@ class Agenda(Base, CreatedAtMixin, SoftDeleteMixin):
     order_num: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[AgendaStatus] = mapped_column(
-        Enum(AgendaStatus, name="agenda_status"),
-        default=AgendaStatus.PENDING,
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     started_at_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Relationships

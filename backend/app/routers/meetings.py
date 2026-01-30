@@ -39,7 +39,7 @@ def _convert_agenda_to_brief(agenda) -> AgendaBrief:
         order_num=agenda.order_num,
         title=agenda.title,
         description=agenda.description,
-        status=agenda.status.value,
+        status=agenda.status,
         started_at_seconds=agenda.started_at_seconds,
         parent_id=agenda.parent_id,
         level=agenda.level,

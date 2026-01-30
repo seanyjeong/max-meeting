@@ -78,19 +78,26 @@ function createResultsStore() {
 		update((state) => ({ ...state, isLoading: true, error: null }));
 
 		try {
-			const [resultResponse, versionsResponse, actionItemsResponse] = await Promise.all([
-				api.get<{ data: MeetingResult }>(`/meetings/${meetingId}/result`).catch(() => null),
-				api.get<{ data: ResultVersion[] }>(`/meetings/${meetingId}/result/versions`).catch(() => ({ data: [] })),
+			const [resultsResponse, actionItemsResponse] = await Promise.all([
+				api.get<{ data: MeetingResult[] }>(`/meetings/${meetingId}/results`).catch(() => ({ data: [] })),
 				api.get<{ data: ActionItem[] }>(`/meetings/${meetingId}/action-items`).catch(() => ({ data: [] }))
 			]);
 
+			const results = resultsResponse.data || [];
+			const latestResult = results.length > 0 ? results[results.length - 1] : null;
+			const versions: ResultVersion[] = results.map((r) => ({
+				version: r.version,
+				created_at: r.created_at,
+				summary_preview: r.summary?.slice(0, 100) || ''
+			}));
+
 			update((state) => ({
 				...state,
-				currentResult: resultResponse?.data ?? null,
-				versions: versionsResponse.data || [],
+				currentResult: latestResult,
+				versions,
 				actionItems: actionItemsResponse.data || [],
-				selectedVersion: resultResponse?.data?.version ?? null,
-				editedSummary: resultResponse?.data?.summary ?? '',
+				selectedVersion: latestResult?.version ?? null,
+				editedSummary: latestResult?.summary ?? '',
 				isLoading: false
 			}));
 		} catch (error) {
@@ -120,16 +127,24 @@ function createResultsStore() {
 		update((state) => ({ ...state, isLoading: true }));
 
 		try {
-			const response = await api.get<{ data: MeetingResult }>(
-				`/meetings/${meetingId}/result/versions/${version}`
+			// Get all results and find the one with matching version
+			const response = await api.get<{ data: MeetingResult[] }>(
+				`/meetings/${meetingId}/results`
 			);
-			update((state) => ({
-				...state,
-				currentResult: response.data,
-				selectedVersion: version,
-				editedSummary: response.data.summary,
-				isLoading: false
-			}));
+			const results = response.data || [];
+			const targetResult = results.find((r) => r.version === version);
+
+			if (targetResult) {
+				update((state) => ({
+					...state,
+					currentResult: targetResult,
+					selectedVersion: version,
+					editedSummary: targetResult.summary,
+					isLoading: false
+				}));
+			} else {
+				throw new Error('Version not found');
+			}
 		} catch (error) {
 			update((state) => ({
 				...state,
@@ -144,27 +159,33 @@ function createResultsStore() {
 
 		try {
 			let currentSummary = '';
+			let resultId: number | null = null;
 			update((state) => {
 				currentSummary = state.editedSummary;
+				resultId = state.currentResult?.id ?? null;
 				return state;
 			});
 
-			const response = await api.patch<{ data: MeetingResult }>(
-				`/meetings/${meetingId}/result`,
+			if (!resultId) {
+				throw new Error('No result to save');
+			}
+
+			const response = await api.patch<MeetingResult>(
+				`/results/${resultId}`,
 				{ summary: currentSummary }
 			);
 
 			update((state) => ({
 				...state,
-				currentResult: response.data,
+				currentResult: response,
 				editMode: false,
 				isLoading: false,
 				versions: [
 					...state.versions,
 					{
-						version: response.data.version,
-						created_at: response.data.created_at,
-						summary_preview: response.data.summary.slice(0, 100)
+						version: response.version,
+						created_at: response.created_at,
+						summary_preview: response.summary.slice(0, 100)
 					}
 				]
 			}));
@@ -181,14 +202,15 @@ function createResultsStore() {
 		update((state) => ({ ...state, isGenerating: true, error: null }));
 
 		try {
-			const response = await api.post<{ data: MeetingResult }>(
-				`/meetings/${meetingId}/generate-result`
+			const response = await api.post<MeetingResult>(
+				`/meetings/${meetingId}/results`,
+				{ summary: '' }
 			);
 
 			update((state) => ({
 				...state,
-				currentResult: response.data,
-				editedSummary: response.data.summary,
+				currentResult: response,
+				editedSummary: response.summary || '',
 				isGenerating: false
 			}));
 		} catch (error) {
@@ -204,14 +226,24 @@ function createResultsStore() {
 		update((state) => ({ ...state, isGenerating: true, error: null }));
 
 		try {
-			const response = await api.post<{ data: MeetingResult }>(
-				`/meetings/${meetingId}/regenerate-result`
+			let resultId: number | null = null;
+			update((state) => {
+				resultId = state.currentResult?.id ?? null;
+				return state;
+			});
+
+			if (!resultId) {
+				throw new Error('No result to regenerate');
+			}
+
+			const response = await api.post<MeetingResult>(
+				`/results/${resultId}/regenerate`
 			);
 
 			update((state) => ({
 				...state,
-				currentResult: response.data,
-				editedSummary: response.data.summary,
+				currentResult: response,
+				editedSummary: response.summary || '',
 				isGenerating: false
 			}));
 		} catch (error) {
@@ -227,13 +259,23 @@ function createResultsStore() {
 		update((state) => ({ ...state, isLoading: true }));
 
 		try {
-			const response = await api.post<{ data: MeetingResult }>(
-				`/meetings/${meetingId}/result/verify`
+			let resultId: number | null = null;
+			update((state) => {
+				resultId = state.currentResult?.id ?? null;
+				return state;
+			});
+
+			if (!resultId) {
+				throw new Error('No result to verify');
+			}
+
+			const response = await api.post<MeetingResult>(
+				`/results/${resultId}/verify`
 			);
 
 			update((state) => ({
 				...state,
-				currentResult: response.data,
+				currentResult: response,
 				isLoading: false
 			}));
 		} catch (error) {

@@ -34,7 +34,6 @@ class ResultService:
             select(Meeting)
             .options(
                 selectinload(Meeting.results),
-                selectinload(Meeting.decisions),
                 selectinload(Meeting.action_items),
             )
             .where(

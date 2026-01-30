@@ -86,7 +86,7 @@ class SearchService:
                 "id": row.id,
                 "title": row.title,
                 "scheduled_at": row.scheduled_at,
-                "status": row.status.value,
+                "status": row.status,
                 "highlight": self._create_highlight(row.summary, query),
                 "match_score": float(row.match_score),
             }

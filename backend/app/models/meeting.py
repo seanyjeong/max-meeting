@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from app.models.note import ManualNote, Sketch
     from app.models.recording import Recording, Transcript
     from app.models.result import ActionItem, MeetingResult
-    from app.models.task import TaskTracking
 
 
 class MeetingType(Base, TimestampMixin, SoftDeleteMixin):
@@ -129,11 +128,6 @@ class Meeting(Base, TimestampMixin, SoftDeleteMixin):
     )
     action_items: Mapped[list["ActionItem"]] = relationship(
         "ActionItem",
-        back_populates="meeting",
-        lazy="selectin",
-    )
-    task_trackings: Mapped[list["TaskTracking"]] = relationship(
-        "TaskTracking",
         back_populates="meeting",
         lazy="selectin",
     )
