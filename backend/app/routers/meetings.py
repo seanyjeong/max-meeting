@@ -389,7 +389,7 @@ async def get_meeting_transcript(
     Returns segments from all transcripts ordered by time.
     """
     from sqlalchemy import select
-    from app.models.transcript import Transcript
+    from app.models.recording import Transcript
 
     # Check meeting exists
     service = MeetingService(db)
