@@ -7,6 +7,7 @@
 	import ActionItems from '$lib/components/results/ActionItems.svelte';
 	import TranscriptViewer from '$lib/components/results/TranscriptViewer.svelte';
 	import SpeakerMapper from '$lib/components/results/SpeakerMapper.svelte';
+	import RecordingsList from '$lib/components/results/RecordingsList.svelte';
 	import { Tabs, Skeleton, KeyboardShortcuts, EmptyState } from '$lib/components/ui';
 	import { currentMeeting, isLoading } from '$lib/stores/meeting';
 	import { resultsStore, hasResult, isVerified } from '$lib/stores/results';
@@ -19,7 +20,11 @@
 	// Recording status types
 	interface Recording {
 		id: number;
+		filename?: string;
 		status: 'pending' | 'uploaded' | 'processing' | 'completed' | 'failed';
+		duration?: number;
+		file_size?: number;
+		created_at: string;
 		error_message?: string | null;
 	}
 
@@ -235,8 +240,9 @@
 		if (processingStatus === 'processing' || processingStatus === 'uploaded') {
 			statusPollInterval = setInterval(async () => {
 				await loadRecordingsStatus();
-				// Reload transcript and stop polling when complete
-				if (processingStatus === 'ready') {
+				// Check if all recordings are completed (ready state)
+				const allCompleted = recordings.length > 0 && recordings.every(r => r.status === 'completed');
+				if (allCompleted) {
 					await resultsStore.loadTranscript(meetingId);
 					toast.success('변환 완료! 회의록을 생성할 수 있습니다.');
 					if (statusPollInterval) {
@@ -380,6 +386,13 @@
 			<div class="generating-banner">
 				<LoadingSpinner />
 				<span>회의 결과 생성 중... 잠시 기다려 주세요.</span>
+			</div>
+		{/if}
+
+		<!-- Recordings List (always visible when there are recordings) -->
+		{#if recordings.length > 0}
+			<div class="recordings-section">
+				<RecordingsList {recordings} loading={recordingsLoading} />
 			</div>
 		{/if}
 
@@ -527,8 +540,20 @@
 								</div>
 								<h3>{statusMessages.processing.title}</h3>
 								<p>{statusMessages.processing.description}</p>
-								<div class="text-sm text-gray-400 mt-2">
-									자동으로 새로고침됩니다...
+
+								<!-- Progress indicator -->
+								<div class="progress-section mt-4 w-full max-w-xs">
+									<div class="progress-bar-bg">
+										<div class="progress-bar-fill animate-pulse"></div>
+									</div>
+									<div class="progress-info">
+										<span class="text-xs text-gray-500">처리 중...</span>
+										<span class="text-xs text-gray-400">3초마다 상태 확인</span>
+									</div>
+								</div>
+
+								<div class="text-sm text-gray-400 mt-4">
+									녹음 길이에 따라 수 분이 소요될 수 있습니다
 								</div>
 							{:else if processingStatus === 'ready'}
 								<!-- Ready to generate -->
@@ -754,5 +779,34 @@
 	.empty-state p {
 		color: #6b7280;
 		margin: 0;
+	}
+
+	.recordings-section {
+		margin-bottom: 1rem;
+	}
+
+	.progress-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.progress-bar-bg {
+		height: 6px;
+		background: #e5e7eb;
+		border-radius: 9999px;
+		overflow: hidden;
+	}
+
+	.progress-bar-fill {
+		height: 100%;
+		width: 60%;
+		background: linear-gradient(90deg, #fbbf24, #f59e0b);
+		border-radius: 9999px;
+	}
+
+	.progress-info {
+		display: flex;
+		justify-content: space-between;
 	}
 </style>

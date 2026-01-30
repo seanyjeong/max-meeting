@@ -22,6 +22,7 @@
 		onStop?: () => void;
 		onPause?: () => void;
 		onResume?: () => void;
+		onFinishMeeting?: () => void;
 	}
 
 	let {
@@ -33,7 +34,8 @@
 		onStart,
 		onStop,
 		onPause,
-		onResume
+		onResume,
+		onFinishMeeting
 	}: Props = $props();
 
 	// Derived state for UI
@@ -169,14 +171,14 @@
 			</button>
 		{/if}
 
-		<!-- RIGHT: Current agenda label -->
-		<div class="flex items-center gap-2 min-w-0 flex-1 justify-end">
+		<!-- CENTER: Current agenda label -->
+		<div class="flex items-center gap-2 min-w-0 flex-1">
 			{#if currentAgenda}
 				<span class="text-sm font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
 					현재 안건:
 				</span>
 				<span
-					class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[400px]"
+					class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[300px]"
 					title={currentAgenda}
 				>
 					{currentAgenda}
@@ -187,6 +189,21 @@
 				</span>
 			{/if}
 		</div>
+
+		<!-- RIGHT: Finish Meeting button (only when not recording) -->
+		{#if !isActive && onFinishMeeting}
+			<button
+				type="button"
+				onclick={onFinishMeeting}
+				class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center gap-2"
+				aria-label="회의 마무리"
+			>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+				</svg>
+				회의 마무리
+			</button>
+		{/if}
 	</div>
 </div>
 

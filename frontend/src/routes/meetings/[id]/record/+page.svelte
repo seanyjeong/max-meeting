@@ -320,6 +320,21 @@
 		recordingStore.reset();
 		visualizationStore.stop();
 	}
+
+	async function handleFinishMeeting() {
+		// Save notes first
+		await notesStore.forceSave();
+
+		// Update meeting status to completed
+		try {
+			await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
+			toast.success('회의가 마무리되었습니다.');
+			goto(`/meetings/${meetingId}/results`);
+		} catch (error) {
+			console.error('Failed to finish meeting:', error);
+			toast.error('회의 마무리에 실패했습니다.');
+		}
+	}
 </script>
 
 <svelte:head>
@@ -348,14 +363,22 @@
 		onStop={handleStopRecording}
 		onPause={handlePauseRecording}
 		onResume={handleResumeRecording}
+		onFinishMeeting={handleFinishMeeting}
 	/>
 
 	<!-- Main content area (below nav + recording bar) -->
 	<div class="pt-[120px]">
-		<!-- Breadcrumb -->
+		<!-- Breadcrumb + Hint -->
 		<div class="px-4 py-3 border-b bg-white">
 			<div class="flex items-center justify-between">
-				<Breadcrumb items={breadcrumbItems} />
+				<div class="flex items-center gap-4">
+					<Breadcrumb items={breadcrumbItems} />
+					{#if !$isRecording && !$isPaused}
+						<span class="text-xs text-gray-400 hidden sm:inline">
+							녹음 없이 진행하려면 오른쪽 "회의 마무리" 버튼을 누르세요
+						</span>
+					{/if}
+				</div>
 
 				<!-- Battery warning -->
 				{#if $batteryWarning}

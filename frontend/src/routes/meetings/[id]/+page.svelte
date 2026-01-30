@@ -99,6 +99,29 @@
 		}
 	}
 
+	async function finishMeeting() {
+		if (!$currentMeeting) return;
+
+		try {
+			await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
+			goto(`/meetings/${meetingId}/results`);
+		} catch (err) {
+			console.error('Failed to finish meeting:', err);
+		}
+	}
+
+	async function startWithoutRecording() {
+		if (!$currentMeeting) return;
+
+		try {
+			// Set status to completed directly (skip recording)
+			await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
+			goto(`/meetings/${meetingId}/results`);
+		} catch (err) {
+			console.error('Failed to start without recording:', err);
+		}
+	}
+
 	async function deleteMeeting() {
 		if (!confirm('이 회의를 삭제하시겠습니까?')) return;
 
@@ -239,18 +262,35 @@
 				{#if $currentMeeting.status === 'draft'}
 					<button
 						type="button"
+						onclick={startWithoutRecording}
+						disabled={isUsingCache}
+						class="btn btn-secondary"
+						title="녹음 없이 메모 기반으로 회의록 생성"
+					>
+						메모로 시작
+					</button>
+					<button
+						type="button"
 						onclick={startMeeting}
 						disabled={isUsingCache}
 						class="btn btn-primary"
 					>
-						회의 시작
+						녹음으로 시작
 					</button>
 				{:else if $currentMeeting.status === 'in_progress'}
-					<a href="/meetings/{meetingId}/record" class="btn btn-primary">
-						회의 계속하기
+					<a href="/meetings/{meetingId}/record" class="btn btn-secondary">
+						녹음 계속하기
 					</a>
+					<button
+						type="button"
+						onclick={finishMeeting}
+						disabled={isUsingCache}
+						class="btn btn-primary"
+					>
+						회의 마무리
+					</button>
 				{:else if $currentMeeting.status === 'completed'}
-					<a href="/meetings/{meetingId}/result" class="btn btn-primary">
+					<a href="/meetings/{meetingId}/results" class="btn btn-primary">
 						결과 보기
 					</a>
 				{/if}
