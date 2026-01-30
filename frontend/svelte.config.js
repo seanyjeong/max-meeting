@@ -6,7 +6,9 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
-		adapter: adapter(),
+		adapter: adapter({
+			runtime: 'edge' // Edge runtime for faster cold starts
+		}),
 		alias: {
 			$lib: './src/lib'
 		}
