@@ -138,25 +138,40 @@ Meeting Information:
 - Attendees: {', '.join(meeting_info.get('attendees', []))}
 """
 
-        agendas_text = "\n".join(
-            f"{i+1}. {title}" for i, title in enumerate(agenda_titles)
-        )
+        # Build agenda section with per-agenda transcripts if available
+        agenda_info = meeting_info.get('agenda_info', []) if meeting_info else []
+
+        if agenda_info:
+            # Use per-agenda transcript info for more accurate summaries
+            agendas_parts = []
+            for info in agenda_info:
+                agenda_text = f"\n### 안건 {info['order'] + 1}: {info['title']}"
+                if info.get('transcript'):
+                    agenda_text += f"\n[해당 안건 대화 내용]\n{info['transcript']}"
+                else:
+                    agenda_text += "\n[해당 안건 대화 내용 없음]"
+                agendas_parts.append(agenda_text)
+            agendas_section = "\n".join(agendas_parts)
+        else:
+            # Fallback to simple agenda list
+            agendas_section = "Agenda Items:\n" + "\n".join(
+                f"{i+1}. {title}" for i, title in enumerate(agenda_titles)
+            )
 
         notes_text = f"\nManual Notes:\n{notes}" if notes else ""
         sketch_text = f"\nExtracted Sketch Text:\n{sketch_texts}" if sketch_texts else ""
 
         # Handle missing or empty transcript
         if transcript and transcript.strip():
-            transcript_section = f"STT Transcript:\n{transcript}"
+            transcript_section = f"\n## 전체 대화 내용 (참고용)\n{transcript}"
             transcript_status = "available"
         else:
-            transcript_section = "STT Transcript:\n[녹음된 음성 내용 없음 - 메모와 안건만으로 요약 생성]"
+            transcript_section = ""
             transcript_status = "no_recording"
 
         prompt = f"""{meeting_info_text}
-Agenda Items:
-{agendas_text}
-
+## 안건별 대화 내용
+{agendas_section}
 {transcript_section}
 {notes_text}
 {sketch_text}
@@ -164,16 +179,13 @@ Agenda Items:
 Recording Status: {transcript_status}
 
 Requirements:
-1. Summarize discussion content for each agenda item based on available data
-2. Clearly identify decisions made
-3. Extract action items (assignee, content, due date if mentioned)
-4. Do not add information not present in the source materials
-5. Respond in JSON format only
-6. If no transcript is available, base summary on meeting notes and agenda items only
-7. Analyze meeting atmosphere (positive/neutral/tense)
-8. Identify key turning points in the discussion
-8. Note consensus level (0-100)
-9. Summarize top 3 speaker contributions
+1. IMPORTANT: 각 안건의 discussion은 해당 안건의 대화 내용만 기반으로 작성하세요
+2. 안건별로 분리된 대화 내용이 있으면 그것을 우선 사용하세요
+3. 명확한 결정 사항을 식별하세요
+4. 실행 항목 추출 (담당자, 내용, 기한)
+5. 원본에 없는 내용을 추가하지 마세요
+6. JSON 형식으로만 응답하세요
+7. 대화 내용이 없는 안건은 "[논의 내용 없음]"으로 표시하세요
 
 Output format:
 {{
@@ -651,6 +663,7 @@ async def refine_transcript(
 """
 
     try:
+        logger.info(f"LLM Service type: {type(service)}, Provider type: {type(service._provider)}")
         refined_text = await service._provider.generate_text(
             prompt=prompt,
             temperature=0.3,  # 낮은 temperature로 일관성 유지

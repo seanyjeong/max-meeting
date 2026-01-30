@@ -145,19 +145,50 @@ def generate_meeting_result(
                 message="Preparing transcript data",
             )
 
-            # Gather transcripts
-            transcript_texts = []
+            # Gather ALL transcript segments with timestamps
+            all_segments = []
             for transcript in meeting.transcripts:
                 if transcript.segments:
                     for segment in transcript.segments:
-                        text = segment.get("text", "")
-                        if text:
-                            transcript_texts.append(text)
+                        all_segments.append({
+                            "start": segment.get("start", 0),
+                            "end": segment.get("end", 0),
+                            "text": segment.get("text", ""),
+                            "speaker": segment.get("speaker"),
+                        })
 
-            full_transcript = " ".join(transcript_texts)
+            # Sort segments by start time
+            all_segments.sort(key=lambda x: x["start"])
+
+            # Build full transcript for overall summary
+            full_transcript = " ".join(seg["text"] for seg in all_segments if seg["text"])
 
             if not full_transcript:
                 logger.warning(f"No transcript text found for meeting {meeting_id}")
+
+            # Build per-agenda transcript based on started_at_seconds
+            # Sort agendas by started_at_seconds (treat None as infinity)
+            sorted_agendas = sorted(
+                meeting.agendas,
+                key=lambda a: a.started_at_seconds if a.started_at_seconds is not None else float('inf')
+            )
+
+            agenda_transcripts = {}  # agenda_id -> transcript text
+            for i, agenda in enumerate(sorted_agendas):
+                start_time = agenda.started_at_seconds or 0
+                # End time is the start of next agenda, or infinity
+                if i + 1 < len(sorted_agendas) and sorted_agendas[i + 1].started_at_seconds is not None:
+                    end_time = sorted_agendas[i + 1].started_at_seconds
+                else:
+                    end_time = float('inf')
+
+                # Find segments in this time range
+                agenda_segments = [
+                    seg["text"] for seg in all_segments
+                    if seg["start"] >= start_time and seg["start"] < end_time and seg["text"]
+                ]
+                agenda_transcripts[agenda.id] = " ".join(agenda_segments)
+                logger.info(f"Agenda '{agenda.title}' ({start_time}s-{end_time}s): {len(agenda_segments)} segments")
 
             # Gather manual notes
             notes_texts = [note.content for note in meeting.manual_notes if note.content]
@@ -171,7 +202,16 @@ def generate_meeting_result(
             ]
             sketches_combined = "\n".join(sketch_texts) if sketch_texts else None
 
-            # Prepare agenda titles
+            # Prepare agenda info with per-agenda transcripts
+            agenda_info = [
+                {
+                    "id": agenda.id,
+                    "title": agenda.title,
+                    "order": agenda.order_num,
+                    "transcript": agenda_transcripts.get(agenda.id, ""),
+                }
+                for agenda in meeting.agendas
+            ]
             agenda_titles = [agenda.title for agenda in meeting.agendas]
 
             # Prepare meeting info
@@ -184,6 +224,7 @@ def generate_meeting_result(
                 "title": meeting.title,
                 "scheduled_at": meeting.scheduled_at.isoformat() if meeting.scheduled_at else None,
                 "attendees": attendee_names,
+                "agenda_info": agenda_info,  # Include per-agenda transcript info
             }
 
             publish_progress(
