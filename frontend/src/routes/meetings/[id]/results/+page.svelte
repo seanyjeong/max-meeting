@@ -88,6 +88,22 @@
 			toast.success('음성 변환을 시작했습니다.');
 			// Reload status
 			await loadRecordingsStatus();
+
+			// Start polling for status updates
+			if (!statusPollInterval) {
+				statusPollInterval = setInterval(async () => {
+					await loadRecordingsStatus();
+					// Reload transcript and stop polling when complete
+					if (processingStatus === 'ready') {
+						await resultsStore.loadTranscript(meetingId);
+						toast.success('변환 완료! 회의록을 생성할 수 있습니다.');
+						if (statusPollInterval) {
+							clearInterval(statusPollInterval);
+							statusPollInterval = null;
+						}
+					}
+				}, 3000); // Poll every 3 seconds
+			}
 		} catch (error) {
 			console.error('Failed to trigger STT:', error);
 			toast.error('변환 시작에 실패했습니다.');
@@ -215,19 +231,20 @@
 			loadRecordingsStatus()
 		]);
 
-		// Start polling if processing
-		if (processingStatus === 'processing') {
+		// Start polling if processing or just uploaded (auto-STT may be running)
+		if (processingStatus === 'processing' || processingStatus === 'uploaded') {
 			statusPollInterval = setInterval(async () => {
 				await loadRecordingsStatus();
-				// Also reload transcript when processing completes
+				// Reload transcript and stop polling when complete
 				if (processingStatus === 'ready') {
 					await resultsStore.loadTranscript(meetingId);
+					toast.success('변환 완료! 회의록을 생성할 수 있습니다.');
 					if (statusPollInterval) {
 						clearInterval(statusPollInterval);
 						statusPollInterval = null;
 					}
 				}
-			}, 5000); // Poll every 5 seconds
+			}, 3000); // Poll every 3 seconds
 		}
 	});
 
