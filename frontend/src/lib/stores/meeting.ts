@@ -25,6 +25,11 @@ export interface MeetingDetail extends Meeting {
 	attendees: Attendee[];
 }
 
+export interface TimeSegment {
+	start: number;
+	end: number | null;
+}
+
 export interface Agenda {
 	id: number;
 	meeting_id: number;
@@ -35,6 +40,7 @@ export interface Agenda {
 	description: string | null;
 	status: 'pending' | 'in_progress' | 'completed';
 	started_at_seconds: number | null;
+	time_segments: TimeSegment[] | null;
 	questions: AgendaQuestion[];
 	children: Agenda[];
 }

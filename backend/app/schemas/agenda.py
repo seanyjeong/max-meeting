@@ -8,6 +8,18 @@ from app.models.enums import AgendaStatus
 
 
 # ============================================
+# Time Segment Schema
+# ============================================
+
+
+class TimeSegment(BaseModel):
+    """Schema for a time segment within an agenda."""
+
+    start: int = Field(..., ge=0, description="Start time in seconds")
+    end: int | None = Field(None, ge=0, description="End time in seconds (null if ongoing)")
+
+
+# ============================================
 # Agenda Question Schemas
 # ============================================
 
@@ -75,6 +87,7 @@ class AgendaUpdate(BaseModel):
     status: AgendaStatus | None = None
     started_at_seconds: int | None = Field(default=None, ge=0)
     parent_id: int | None = Field(default=None, description="Parent agenda ID (set to move in hierarchy)")
+    time_segments: list[TimeSegment] | None = Field(default=None, description="Time segments for multi-segment support")
 
 
 class AgendaResponse(AgendaBase):
@@ -87,6 +100,7 @@ class AgendaResponse(AgendaBase):
     parent_id: int | None = None
     level: int = 0
     started_at_seconds: int | None = None
+    time_segments: list[TimeSegment] | None = None
     created_at: datetime
     questions: list[QuestionResponse] = []
     children: list["AgendaResponse"] = []

@@ -1,0 +1,23 @@
+{
+  "currentFeature": "time-segments",
+  "phase": "do",
+  "createdAt": "2026-01-30T12:00:00Z",
+  "updatedAt": "2026-01-30T13:00:00Z",
+  "history": [
+    {
+      "phase": "plan",
+      "timestamp": "2026-01-30T12:00:00Z",
+      "document": "docs/01-plan/features/time-segments.plan.md"
+    },
+    {
+      "phase": "design",
+      "timestamp": "2026-01-30T12:30:00Z",
+      "document": "docs/02-design/features/time-segments.design.md"
+    },
+    {
+      "phase": "do",
+      "timestamp": "2026-01-30T13:00:00Z",
+      "status": "in_progress"
+    }
+  ]
+}

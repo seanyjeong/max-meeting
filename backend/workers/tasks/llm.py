@@ -166,42 +166,64 @@ def generate_meeting_result(
             if not full_transcript:
                 logger.warning(f"No transcript text found for meeting {meeting_id}")
 
-            # Build per-agenda transcript based on started_at_seconds
-            # Only use agendas that have actual timestamps set
-            agendas_with_time = [a for a in meeting.agendas if a.started_at_seconds is not None]
-            agendas_with_time.sort(key=lambda a: a.started_at_seconds)
-
+            # Build per-agenda transcript based on time_segments (or fallback to started_at_seconds)
             agenda_transcripts = {}  # agenda_id -> transcript text
 
-            if agendas_with_time:
-                # Some agendas have timestamps - use them for segmentation
-                for i, agenda in enumerate(agendas_with_time):
+            def get_agenda_transcript(agenda, all_segs: list[dict]) -> str:
+                """Extract transcript for an agenda from its time segments."""
+                # Priority 1: Use time_segments if available (supports multiple segments)
+                if agenda.time_segments:
+                    texts = []
+                    for seg in agenda.time_segments:
+                        start = seg.get('start', 0)
+                        end = seg.get('end') or float('inf')
+                        matching = [
+                            s["text"] for s in all_segs
+                            if start <= s["start"] < end and s["text"]
+                        ]
+                        texts.extend(matching)
+                    return " ".join(texts)
+
+                # Priority 2: Fallback to started_at_seconds (legacy single timestamp)
+                elif agenda.started_at_seconds is not None:
+                    # Find next agenda's start time for end boundary
+                    agendas_sorted = sorted(
+                        [a for a in meeting.agendas if a.started_at_seconds is not None],
+                        key=lambda a: a.started_at_seconds
+                    )
+                    idx = next((i for i, a in enumerate(agendas_sorted) if a.id == agenda.id), -1)
                     start_time = agenda.started_at_seconds
-                    # End time is the start of next timed agenda, or infinity
-                    if i + 1 < len(agendas_with_time):
-                        end_time = agendas_with_time[i + 1].started_at_seconds
+                    if idx >= 0 and idx + 1 < len(agendas_sorted):
+                        end_time = agendas_sorted[idx + 1].started_at_seconds
                     else:
                         end_time = float('inf')
 
-                    # Find segments in this time range
-                    agenda_segments = [
-                        seg["text"] for seg in all_segments
-                        if seg["start"] >= start_time and seg["start"] < end_time and seg["text"]
+                    matching = [
+                        s["text"] for s in all_segs
+                        if start_time <= s["start"] < end_time and s["text"]
                     ]
-                    agenda_transcripts[agenda.id] = " ".join(agenda_segments)
-                    logger.info(f"Agenda '{agenda.title}' ({start_time}s-{end_time}s): {len(agenda_segments)} segments")
+                    return " ".join(matching)
 
-                # Agendas without timestamps get empty transcript (LLM will use overall context)
-                for agenda in meeting.agendas:
-                    if agenda.id not in agenda_transcripts:
-                        agenda_transcripts[agenda.id] = ""
-                        logger.info(f"Agenda '{agenda.title}' (no timestamp): no segments assigned")
-            else:
-                # No agendas have timestamps - give all agendas empty transcript
-                # LLM will use the full transcript to infer per-agenda content
-                for agenda in meeting.agendas:
-                    agenda_transcripts[agenda.id] = ""
-                    logger.info(f"Agenda '{agenda.title}' (no timestamps mode): LLM will auto-classify")
+                return ""
+
+            # Process all agendas
+            for agenda in meeting.agendas:
+                transcript_text = get_agenda_transcript(agenda, all_segments)
+                agenda_transcripts[agenda.id] = transcript_text
+
+                # Log info
+                if agenda.time_segments:
+                    seg_count = len(agenda.time_segments)
+                    total_duration = sum(
+                        (seg.get('end') or 0) - seg.get('start', 0)
+                        for seg in agenda.time_segments
+                        if seg.get('end')
+                    )
+                    logger.info(f"Agenda '{agenda.title}' ({seg_count} segments, ~{total_duration}s): {len(transcript_text.split())} words")
+                elif agenda.started_at_seconds is not None:
+                    logger.info(f"Agenda '{agenda.title}' (legacy @{agenda.started_at_seconds}s): {len(transcript_text.split())} words")
+                else:
+                    logger.info(f"Agenda '{agenda.title}' (no timestamp): LLM will auto-classify")
 
             # Gather manual notes
             notes_texts = [note.content for note in meeting.manual_notes if note.content]

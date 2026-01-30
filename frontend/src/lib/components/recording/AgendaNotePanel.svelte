@@ -1,28 +1,31 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import type { Agenda, AgendaQuestion } from '$lib/stores/meeting';
+	import type { Agenda, AgendaQuestion, TimeSegment } from '$lib/stores/meeting';
 
 	interface Props {
 		agendas: Agenda[];
 		currentAgendaIndex: number;
 		notes: Map<number, string>;
-		onNextAgenda: (agendaId: number, timestamp: number) => void;
+		recordingTime: number;
+		isRecording: boolean;
+		onAgendaChange: (prevAgendaId: number | null, newAgendaId: number, currentTime: number) => void;
 		onQuestionToggle: (questionId: number, answered: boolean) => void;
 		onNoteChange: (agendaId: number, content: string) => void;
-		recordingTime: number;
 	}
 
 	let {
 		agendas,
 		currentAgendaIndex = $bindable(),
 		notes,
-		onNextAgenda,
+		recordingTime,
+		isRecording,
+		onAgendaChange,
 		onQuestionToggle,
-		onNoteChange,
-		recordingTime
+		onNoteChange
 	}: Props = $props();
 
 	let noteDebounceTimers = new Map<number, ReturnType<typeof setTimeout>>();
+	let listCollapsed = $state(false);
 
 	// Current agenda
 	let currentAgenda = $derived(agendas[currentAgendaIndex]);
@@ -36,6 +39,51 @@
 		noteDebounceTimers.clear();
 	});
 
+	// Helper functions
+	function formatTime(seconds: number): string {
+		const mins = Math.floor(seconds / 60);
+		const secs = Math.floor(seconds % 60);
+		return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+	}
+
+	function getStatusIcon(agenda: Agenda, index: number): string {
+		if (index === currentAgendaIndex) return '▶';
+		if (agenda.status === 'completed') return '✓';
+		if (hasMultipleSegments(agenda)) return '↺';
+		if (agenda.time_segments?.length || agenda.started_at_seconds !== null) return '●';
+		return '○';
+	}
+
+	function getStatusColor(agenda: Agenda, index: number): string {
+		if (index === currentAgendaIndex) return 'text-blue-600';
+		if (agenda.status === 'completed') return 'text-green-600';
+		if (hasMultipleSegments(agenda)) return 'text-purple-600';
+		return 'text-gray-400';
+	}
+
+	function hasMultipleSegments(agenda: Agenda): boolean {
+		return (agenda.time_segments?.length ?? 0) > 1;
+	}
+
+	function formatAgendaTime(agenda: Agenda): string {
+		if (agenda.time_segments?.length) {
+			const time = formatTime(agenda.time_segments[0].start);
+			if (agenda.time_segments.length > 1) {
+				return `${time} +${agenda.time_segments.length - 1}`;
+			}
+			return time;
+		}
+		if (agenda.started_at_seconds !== null) {
+			return formatTime(agenda.started_at_seconds);
+		}
+		return '—';
+	}
+
+	function truncate(text: string, maxLen: number): string {
+		if (text.length <= maxLen) return text;
+		return text.slice(0, maxLen - 1) + '…';
+	}
+
 	function handleQuestionToggle(question: AgendaQuestion) {
 		onQuestionToggle(question.id, !question.answered);
 	}
@@ -46,13 +94,11 @@
 		const content = target.value;
 		const agendaId = currentAgenda.id;
 
-		// Clear existing timer
 		const existingTimer = noteDebounceTimers.get(agendaId);
 		if (existingTimer) {
 			clearTimeout(existingTimer);
 		}
 
-		// Debounce note save
 		const timer = setTimeout(() => {
 			onNoteChange(agendaId, content);
 			noteDebounceTimers.delete(agendaId);
@@ -61,80 +107,113 @@
 		noteDebounceTimers.set(agendaId, timer);
 	}
 
+	function goToAgenda(index: number) {
+		if (index >= 0 && index < agendas.length && index !== currentAgendaIndex) {
+			const prevAgenda = agendas[currentAgendaIndex];
+			const targetAgenda = agendas[index];
+
+			// 녹음 중일 때만 time_segments 처리
+			if (isRecording) {
+				onAgendaChange(prevAgenda?.id ?? null, targetAgenda.id, recordingTime);
+			}
+
+			currentAgendaIndex = index;
+		}
+	}
+
 	function goToPrevAgenda() {
 		if (currentAgendaIndex > 0) {
-			const prevIndex = currentAgendaIndex - 1;
-			const prevAgenda = agendas[prevIndex];
-			// 이동하려는 안건에 타임스탬프 저장 (아직 시작 시간이 없는 경우만)
-			if (prevAgenda && prevAgenda.started_at_seconds === null) {
-				onNextAgenda(prevAgenda.id, recordingTime);
-			}
-			currentAgendaIndex = prevIndex;
+			goToAgenda(currentAgendaIndex - 1);
 		}
 	}
 
 	function goToNextAgenda() {
 		if (currentAgendaIndex < agendas.length - 1) {
-			const nextIndex = currentAgendaIndex + 1;
-			const nextAgenda = agendas[nextIndex];
-			// 이동하려는 안건에 타임스탬프 저장 (아직 시작 시간이 없는 경우만)
-			if (nextAgenda && nextAgenda.started_at_seconds === null) {
-				onNextAgenda(nextAgenda.id, recordingTime);
-			}
-			currentAgendaIndex = nextIndex;
+			goToAgenda(currentAgendaIndex + 1);
 		}
 	}
 
-	function goToAgenda(index: number) {
-		if (index >= 0 && index < agendas.length && index !== currentAgendaIndex) {
-			const targetAgenda = agendas[index];
-			// 이동하려는 안건에 타임스탬프 저장 (아직 시작 시간이 없는 경우만)
-			if (targetAgenda && targetAgenda.started_at_seconds === null) {
-				onNextAgenda(targetAgenda.id, recordingTime);
-			}
-			currentAgendaIndex = index;
-		}
+	function toggleListCollapse() {
+		listCollapsed = !listCollapsed;
 	}
 </script>
 
 <div class="w-full h-full bg-white flex flex-col overflow-hidden">
 	{#if currentAgenda}
-		<!-- Header with progress indicator -->
-		<div class="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
-			<div class="flex items-center justify-between">
-				<span class="text-sm font-medium text-blue-600">
-					안건 {currentAgendaIndex + 1} / {agendas.length}
+		<!-- Agenda List Section -->
+		<div class="border-b border-gray-200">
+			<button
+				type="button"
+				onclick={toggleListCollapse}
+				class="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-blue-50 to-white hover:from-blue-100 transition-colors"
+			>
+				<span class="text-sm font-semibold text-blue-700 flex items-center gap-2">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+					</svg>
+					안건 목록
+					<span class="text-blue-500 font-normal">({currentAgendaIndex + 1}/{agendas.length})</span>
 				</span>
-				<!-- Mini progress dots -->
-				<div class="flex gap-1.5">
-					{#each agendas as _, i}
+				<svg
+					class="w-5 h-5 text-gray-500 transition-transform duration-200 {listCollapsed ? '' : 'rotate-180'}"
+					fill="none" stroke="currentColor" viewBox="0 0 24 24"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+				</svg>
+			</button>
+
+			{#if !listCollapsed}
+				<div class="max-h-[180px] overflow-y-auto border-t border-gray-100">
+					{#each agendas as agenda, index (agenda.id)}
 						<button
 							type="button"
-							onclick={() => goToAgenda(i)}
-							class="w-2.5 h-2.5 rounded-full transition-all duration-200 {i === currentAgendaIndex ? 'bg-blue-600 scale-110' : i < currentAgendaIndex ? 'bg-blue-300' : 'bg-gray-300'}"
-							aria-label="안건 {i + 1}로 이동"
-						></button>
+							onclick={() => goToAgenda(index)}
+							class="w-full h-[48px] px-4 flex items-center gap-3 text-left transition-colors
+								{index === currentAgendaIndex
+									? 'bg-blue-50 border-l-4 border-blue-600'
+									: 'hover:bg-gray-50 border-l-4 border-transparent'}"
+						>
+							<span class="w-5 text-center font-medium {getStatusColor(agenda, index)}">
+								{getStatusIcon(agenda, index)}
+							</span>
+							<span class="flex-1 text-sm truncate {index === currentAgendaIndex ? 'font-semibold text-blue-900' : 'text-gray-700'}">
+								{agenda.order_num}. {truncate(agenda.title, 18)}
+							</span>
+							<span class="text-xs text-gray-400 tabular-nums w-14 text-right">
+								{formatAgendaTime(agenda)}
+							</span>
+						</button>
 					{/each}
 				</div>
-			</div>
+			{/if}
 		</div>
 
 		<!-- Scrollable content area -->
 		<div class="flex-1 overflow-y-auto">
-			<div class="p-4 space-y-5">
-				<!-- Agenda Title -->
-				<div>
-					<h2 class="text-lg font-bold text-gray-900 leading-tight">
-						{currentAgenda.title}
-					</h2>
-					{#if currentAgenda.status === 'in_progress'}
-						<span class="inline-block mt-2 px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
-							진행중
-						</span>
-					{:else if currentAgenda.status === 'completed'}
-						<span class="inline-block mt-2 px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
-							완료
-						</span>
+			<div class="p-4 space-y-4">
+				<!-- Current Agenda Header -->
+				<div class="bg-blue-50 rounded-xl p-4 border border-blue-100">
+					<div class="flex items-start justify-between gap-2">
+						<h2 class="text-lg font-bold text-gray-900 leading-tight flex-1">
+							{currentAgenda.order_num}. {currentAgenda.title}
+						</h2>
+						{#if currentAgenda.status === 'in_progress'}
+							<span class="flex-shrink-0 px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
+								진행중
+							</span>
+						{:else if currentAgenda.status === 'completed'}
+							<span class="flex-shrink-0 px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
+								완료
+							</span>
+						{/if}
+					</div>
+					{#if currentAgenda.time_segments?.length}
+						<p class="mt-2 text-xs text-blue-600">
+							⏱ {formatAgendaTime(currentAgenda)}
+							{#if hasMultipleSegments(currentAgenda)}
+								<span class="text-purple-600">(재방문 {currentAgenda.time_segments.length - 1}회)</span>
+							{/if}
+						</p>
 					{/if}
 				</div>
 
@@ -215,7 +294,7 @@
 							value={noteContent}
 							oninput={handleNoteInput}
 							placeholder="이 안건에 대한 메모를 입력하세요..."
-							rows="5"
+							rows="4"
 							class="w-full px-4 py-3 text-base text-gray-900 placeholder-gray-400 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-shadow duration-150"
 						></textarea>
 					</div>
@@ -257,7 +336,6 @@
 			</div>
 		</div>
 	{:else}
-		<!-- No agenda state -->
 		<div class="flex-1 flex items-center justify-center text-gray-500">
 			<p>안건이 없습니다</p>
 		</div>
@@ -265,7 +343,6 @@
 </div>
 
 <style>
-	/* iPad optimization */
 	button, label {
 		-webkit-tap-highlight-color: transparent;
 	}
@@ -279,7 +356,6 @@
 		-webkit-user-select: none;
 	}
 
-	/* Smooth transitions */
 	* {
 		-webkit-font-smoothing: antialiased;
 	}

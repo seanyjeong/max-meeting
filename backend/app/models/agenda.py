@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, SoftDeleteMixin
@@ -35,6 +36,7 @@ class Agenda(Base, CreatedAtMixin, SoftDeleteMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     started_at_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    time_segments: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=None)
 
     # Relationships - use lazy="noload" by default to prevent recursive loading
     meeting: Mapped["Meeting"] = relationship(

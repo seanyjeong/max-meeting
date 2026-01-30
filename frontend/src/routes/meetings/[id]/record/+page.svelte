@@ -37,12 +37,15 @@
 	import CompactRecordingBar from '$lib/components/recording/CompactRecordingBar.svelte';
 	import AgendaNotePanel from '$lib/components/recording/AgendaNotePanel.svelte';
 	import NoteSketchArea from '$lib/components/recording/NoteSketchArea.svelte';
-	import type { MeetingDetail, Agenda } from '$lib/stores/meeting';
+	import type { MeetingDetail, Agenda, TimeSegment } from '$lib/stores/meeting';
 
 	let meetingId = $derived(parseInt($page.params.id || '', 10));
 
 	let meeting = $state<MeetingDetail | null>(null);
 	let currentAgendaIndex = $state(0);
+
+	// Time segments tracking
+	let activeAgendaId = $state<number | null>(null);
 
 	// New state variables for notes/sketch
 	let activeTab = $state<'text' | 'sketch'>('text');
@@ -155,10 +158,11 @@
 				visualizationStore.start(mediaRecorder);
 			}
 
-			// Mark first agenda as in_progress
+			// Start first agenda segment
 			if (meeting && meeting.agendas.length > 0) {
 				const agenda = meeting.agendas[currentAgendaIndex];
-				await updateAgendaTimestamp(agenda.id, 0);
+				await openSegment(agenda.id, 0);
+				activeAgendaId = agenda.id;
 			}
 		}
 	}
@@ -175,6 +179,12 @@
 		// Check minimum duration
 		if (recordingGuard && !recordingGuard.checkMinimumDuration()) {
 			return;
+		}
+
+		// Close current segment before stopping
+		if (activeAgendaId !== null) {
+			await closeSegment(activeAgendaId, $recordingTime);
+			activeAgendaId = null;
 		}
 
 		visualizationStore.stop();
@@ -264,35 +274,72 @@
 		hasRecoveryData = false;
 	}
 
-	async function handleNextAgenda(agendaId: number, timestamp: number) {
-		await updateAgendaTimestamp(agendaId, timestamp);
+	// Time segment management
+	async function handleAgendaChange(prevAgendaId: number | null, newAgendaId: number, currentTime: number) {
+		// Close previous segment
+		if (prevAgendaId !== null && prevAgendaId !== newAgendaId) {
+			await closeSegment(prevAgendaId, currentTime);
+		}
 
-		// Mark previous as completed, current as in_progress
-		if (meeting && currentAgendaIndex < meeting.agendas.length - 1) {
-			currentAgendaIndex++;
+		// Open new segment
+		await openSegment(newAgendaId, currentTime);
+		activeAgendaId = newAgendaId;
+	}
+
+	async function closeSegment(agendaId: number, endTime: number) {
+		if (!meeting) return;
+
+		const agenda = meeting.agendas.find(a => a.id === agendaId);
+		if (!agenda) return;
+
+		const segments = [...(agenda.time_segments || [])];
+		const lastSeg = segments[segments.length - 1];
+
+		if (lastSeg && lastSeg.end === null) {
+			lastSeg.end = endTime;
+
+			try {
+				await api.patch(`/agendas/${agendaId}`, { time_segments: segments });
+				updateLocalAgenda(agendaId, { time_segments: segments });
+			} catch (error) {
+				console.error('Failed to close segment:', error);
+			}
 		}
 	}
 
-	async function updateAgendaTimestamp(agendaId: number, timestamp: number) {
+	async function openSegment(agendaId: number, startTime: number) {
+		if (!meeting) return;
+
+		const agenda = meeting.agendas.find(a => a.id === agendaId);
+		if (!agenda) return;
+
+		const segments = [...(agenda.time_segments || [])];
+		segments.push({ start: startTime, end: null });
+
 		try {
 			await api.patch(`/agendas/${agendaId}`, {
-				started_at_seconds: timestamp,
+				time_segments: segments,
+				started_at_seconds: segments[0].start,
 				status: 'in_progress'
 			});
-
-			// Update local state
-			if (meeting) {
-				meeting = {
-					...meeting,
-					agendas: meeting.agendas.map((a) =>
-						a.id === agendaId
-							? { ...a, started_at_seconds: timestamp, status: 'in_progress' as const }
-							: a
-					)
-				};
-			}
+			updateLocalAgenda(agendaId, {
+				time_segments: segments,
+				started_at_seconds: segments[0].start,
+				status: 'in_progress' as const
+			});
 		} catch (error) {
-			console.error('Failed to update agenda timestamp:', error);
+			console.error('Failed to open segment:', error);
+		}
+	}
+
+	function updateLocalAgenda(agendaId: number, updates: Partial<Agenda>) {
+		if (meeting) {
+			meeting = {
+				...meeting,
+				agendas: meeting.agendas.map((a) =>
+					a.id === agendaId ? { ...a, ...updates } : a
+				)
+			};
 		}
 	}
 
@@ -414,7 +461,8 @@
 					bind:currentAgendaIndex
 					notes={agendaNotes}
 					recordingTime={$recordingTime}
-					onNextAgenda={handleNextAgenda}
+					isRecording={$isRecording}
+					onAgendaChange={handleAgendaChange}
 					onQuestionToggle={handleQuestionToggle}
 					onNoteChange={handleNoteChange}
 				/>
