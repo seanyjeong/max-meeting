@@ -42,12 +42,12 @@ class ApiClient {
 			const token = localStorage.getItem('accessToken');
 			if (token) {
 				headers['Authorization'] = `Bearer ${token}`;
-				if (import.meta.env.DEV) console.log('[API] Authorization header added');
+				console.log('[API] Authorization header added');
 			} else {
-				if (import.meta.env.DEV) console.warn('[API] No access token found in localStorage');
+				console.warn('[API] No access token found in localStorage');
 			}
 		} else {
-			if (import.meta.env.DEV) console.warn('[API] SSR environment - no access token available');
+			console.warn('[API] SSR environment - no access token available');
 		}
 
 		return headers;
@@ -58,22 +58,25 @@ class ApiClient {
 		options: RequestInit
 	): Promise<T> {
 		let response: Response;
+		console.log('[API] Request:', options.method, url);
 
 		try {
 			response = await fetch(url, options);
 		} catch (networkError) {
 			// 네트워크 오류 (서버 다운, CORS, 오프라인 등)
-			if (import.meta.env.DEV) console.error('[API] Network error:', networkError);
+			console.error('[API] Network error:', networkError);
 			throw new ApiError('NETWORK_ERROR', '서버에 연결할 수 없습니다', 0);
 		}
 
+		console.log('[API] Response status:', response.status);
+
 		// Handle 401 Unauthorized
 		if (response.status === 401) {
-			if (import.meta.env.DEV) console.log('[API] 401 received, attempting token refresh');
+			console.log('[API] 401 received, attempting token refresh');
 			const refreshSucceeded = await refreshToken();
 
 			if (refreshSucceeded) {
-				if (import.meta.env.DEV) console.log('[API] Token refreshed, retrying request');
+				console.log('[API] Token refreshed, retrying request');
 				// Update headers with new token
 				const newHeaders = this.getHeaders();
 				const retryOptions = {
@@ -85,7 +88,7 @@ class ApiClient {
 				try {
 					retryResponse = await fetch(url, retryOptions);
 				} catch (retryNetworkError) {
-					if (import.meta.env.DEV) console.error('[API] Retry network error:', retryNetworkError);
+					console.error('[API] Retry network error:', retryNetworkError);
 					throw new ApiError('NETWORK_ERROR', '서버에 연결할 수 없습니다', 0);
 				}
 
@@ -95,7 +98,7 @@ class ApiClient {
 				}
 
 				if (retryResponse.status === 401) {
-					if (import.meta.env.DEV) console.log('[API] Still 401 after refresh, redirecting to login');
+					console.log('[API] Still 401 after refresh, redirecting to login');
 					goto('/login');
 					throw new ApiError('UNAUTHORIZED', '세션이 만료되었습니다', 401);
 				}
@@ -107,7 +110,7 @@ class ApiClient {
 
 				return retryResponse.json();
 			} else {
-				if (import.meta.env.DEV) console.log('[API] Token refresh failed, redirecting to login');
+				console.log('[API] Token refresh failed, redirecting to login');
 				goto('/login');
 				throw new ApiError('UNAUTHORIZED', '세션이 만료되었습니다', 401);
 			}
@@ -115,6 +118,7 @@ class ApiClient {
 
 		if (!response.ok) {
 			const errorData = await this.parseErrorResponse(response);
+			console.error('[API] Error response:', errorData);
 			throw new ApiError(errorData.code, errorData.message, response.status);
 		}
 
@@ -123,7 +127,9 @@ class ApiClient {
 			return undefined as T;
 		}
 
-		return response.json();
+		const jsonData = await response.json();
+		console.log('[API] Response data:', JSON.stringify(jsonData).slice(0, 200));
+		return jsonData;
 	}
 
 	private async parseErrorResponse(response: Response): Promise<{ code: string; message: string }> {

@@ -106,13 +106,21 @@
 		console.log('[+page] agendas updated:', agendas);
 	}
 
+	// Debug log state for UI display
+	let debugLogs: string[] = $state([]);
+	function log(msg: string, data?: any) {
+		const logMsg = data ? `${msg}: ${JSON.stringify(data)}` : msg;
+		console.log('[NEW_MEETING]', logMsg);
+		debugLogs = [...debugLogs.slice(-19), `[${new Date().toLocaleTimeString()}] ${logMsg}`];
+	}
+
 	onMount(async () => {
 		// 로그인 상태 확인 (브라우저에서만)
 		if (typeof window !== 'undefined') {
 			const token = localStorage.getItem('accessToken');
-			if (import.meta.env.DEV) console.log('[NEW_MEETING] Token check:', token ? 'EXISTS' : 'MISSING');
+			log('Token check', token ? 'EXISTS' : 'MISSING');
 			if (!token) {
-				if (import.meta.env.DEV) console.warn('[NEW_MEETING] No access token - redirecting to login');
+				log('No access token - redirecting to login');
 				goto('/login');
 				return;
 			}
@@ -122,13 +130,14 @@
 
 		// 회의 유형 로드 (개별 try-catch)
 		try {
-			if (import.meta.env.DEV) console.log('[NEW_MEETING] Loading meeting types...');
+			log('Loading meeting types...');
 			const typesResponse = await api.get<{ data: MeetingType[] }>('/meeting-types');
-			if (import.meta.env.DEV) console.log('[NEW_MEETING] Meeting types loaded:', typesResponse);
+			log('Meeting types API response', typesResponse);
 			meetingTypes = typesResponse.data || [];
-			if (import.meta.env.DEV) console.log('[NEW_MEETING] meetingTypes set to:', meetingTypes);
+			log('meetingTypes set', { count: meetingTypes.length, types: meetingTypes });
 		} catch (err: any) {
-			if (import.meta.env.DEV) console.error('[NEW_MEETING] Failed to load meeting types:', err);
+			log('Failed to load meeting types', { error: err.message, status: err.status });
+			error = `회의 유형 로드 실패: ${err.message || '알 수 없는 오류'}`;
 			if (err.status === 401 || err.status === 403) {
 				localStorage.removeItem('accessToken');
 				localStorage.removeItem('refreshToken');
@@ -139,12 +148,12 @@
 
 		// 연락처 로드 (개별 try-catch)
 		try {
-			if (import.meta.env.DEV) console.log('[NEW_MEETING] Loading contacts...');
+			log('Loading contacts...');
 			const contactsResponse = await api.get<{ data: Contact[] }>('/contacts', { limit: 100 });
-			if (import.meta.env.DEV) console.log('[NEW_MEETING] Contacts loaded:', contactsResponse);
+			log('Contacts loaded', { count: contactsResponse.data?.length || 0 });
 			contacts = contactsResponse.data || [];
 		} catch (err: any) {
-			if (import.meta.env.DEV) console.error('[NEW_MEETING] Failed to load contacts:', err);
+			log('Failed to load contacts', { error: err.message });
 			// 연락처 로드 실패는 무시 (필수 아님)
 		}
 
@@ -526,6 +535,20 @@
 </svelte:head>
 
 <div class="max-w-3xl mx-auto">
+	<!-- Debug Panel (collapsible) -->
+	{#if debugLogs.length > 0}
+		<details class="mb-4 bg-gray-800 text-green-400 rounded-lg overflow-hidden text-xs">
+			<summary class="px-3 py-2 cursor-pointer hover:bg-gray-700">
+				🐛 Debug ({debugLogs.length} logs) - 회의유형: {meetingTypes.length}개
+			</summary>
+			<div class="px-3 py-2 max-h-40 overflow-y-auto font-mono">
+				{#each debugLogs as logLine}
+					<div class="py-0.5">{logLine}</div>
+				{/each}
+			</div>
+		</details>
+	{/if}
+
 	<div class="mb-6">
 		<a href="/meetings" class="text-sm text-gray-500 hover:text-gray-700">
 			&larr; 회의 목록으로
