@@ -264,15 +264,13 @@
 										{/if}
 
 										<!-- Discussion for child -->
-										{@const childDiscussion = getDiscussion(child.id)}
-										{#if childDiscussion}
+										{#if getDiscussion(child.id)}
 											<div class="discussion-block">
 												<h5 class="block-label">토론 내용</h5>
-												<p>{childDiscussion}</p>
-												{@const keyPoints = getKeyPoints(child.id)}
-												{#if keyPoints.length > 0}
+												<p>{getDiscussion(child.id)}</p>
+												{#if getKeyPoints(child.id).length > 0}
 													<ul class="key-points">
-														{#each keyPoints as point}
+														{#each getKeyPoints(child.id) as point}
 															<li>{point}</li>
 														{/each}
 													</ul>
@@ -281,19 +279,17 @@
 										{/if}
 
 										<!-- Notes for child -->
-										{@const childNotes = getNotesForAgenda(child.id)}
-										{#if childNotes.length > 0}
+										{#if getNotesForAgenda(child.id).length > 0}
 											<div class="notes-block">
 												<h5 class="block-label">메모</h5>
-												{#each childNotes as note}
+												{#each getNotesForAgenda(child.id) as note}
 													<p class="note-content">{note.content}</p>
 												{/each}
 											</div>
 										{/if}
 
 										<!-- Sketches for child -->
-										{@const childSketches = getSketchesForAgenda(child.id)}
-										{#if childSketches.length > 0}
+										{#if getSketchesForAgenda(child.id).length > 0}
 											<div class="sketches-block no-print">
 												<button
 													type="button"
@@ -301,7 +297,7 @@
 													onclick={() => openSketchModal(child.id)}
 												>
 													<Image class="w-4 h-4" />
-													필기 보기 ({childSketches.length}개)
+													필기 보기 ({getSketchesForAgenda(child.id).length}개)
 												</button>
 											</div>
 										{/if}
@@ -309,15 +305,13 @@
 								{/each}
 							{:else}
 								<!-- No children - show parent agenda content -->
-								{@const discussion = getDiscussion(agenda.id)}
-								{#if discussion}
+								{#if getDiscussion(agenda.id)}
 									<div class="discussion-block">
 										<h5 class="block-label">토론 내용</h5>
-										<p>{discussion}</p>
-										{@const keyPoints = getKeyPoints(agenda.id)}
-										{#if keyPoints.length > 0}
+										<p>{getDiscussion(agenda.id)}</p>
+										{#if getKeyPoints(agenda.id).length > 0}
 											<ul class="key-points">
-												{#each keyPoints as point}
+												{#each getKeyPoints(agenda.id) as point}
 													<li>{point}</li>
 												{/each}
 											</ul>
@@ -326,19 +320,17 @@
 								{/if}
 
 								<!-- Notes for parent agenda -->
-								{@const agendaNotes = getNotesForAgenda(agenda.id)}
-								{#if agendaNotes.length > 0}
+								{#if getNotesForAgenda(agenda.id).length > 0}
 									<div class="notes-block">
 										<h5 class="block-label">메모</h5>
-										{#each agendaNotes as note}
+										{#each getNotesForAgenda(agenda.id) as note}
 											<p class="note-content">{note.content}</p>
 										{/each}
 									</div>
 								{/if}
 
 								<!-- Sketches for parent agenda -->
-								{@const agendaSketches = getSketchesForAgenda(agenda.id)}
-								{#if agendaSketches.length > 0}
+								{#if getSketchesForAgenda(agenda.id).length > 0}
 									<div class="sketches-block no-print">
 										<button
 											type="button"
@@ -346,7 +338,7 @@
 											onclick={() => openSketchModal(agenda.id)}
 										>
 											<Image class="w-4 h-4" />
-											필기 보기 ({agendaSketches.length}개)
+											필기 보기 ({getSketchesForAgenda(agenda.id).length}개)
 										</button>
 									</div>
 								{/if}
@@ -394,12 +386,11 @@
 				<button type="button" class="modal-close" onclick={closeSketchModal}>×</button>
 			</header>
 			<div class="modal-body">
-				{@const modalSketches = getSketchesForAgenda(selectedSketchAgendaId)}
-				{#if modalSketches.length === 0}
+				{#if selectedSketchAgendaId && getSketchesForAgenda(selectedSketchAgendaId).length === 0}
 					<p class="empty-sketches">필기 내용이 없습니다.</p>
-				{:else}
+				{:else if selectedSketchAgendaId}
 					<div class="sketch-gallery">
-						{#each modalSketches as sketch, idx}
+						{#each getSketchesForAgenda(selectedSketchAgendaId) as sketch, idx}
 							<div class="sketch-item">
 								<span class="sketch-number">{idx + 1}</span>
 								{#if sketch.snapshot_url}
