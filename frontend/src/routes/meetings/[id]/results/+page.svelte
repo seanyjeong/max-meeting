@@ -53,7 +53,7 @@
 	// Status messages for users
 	const statusMessages: Record<string, { title: string; description: string; color: string }> = {
 		loading: { title: '상태 확인 중...', description: '', color: 'gray' },
-		no_recordings: { title: '녹음이 없습니다', description: '회의를 녹음한 후 결과를 확인할 수 있습니다.', color: 'gray' },
+		no_recordings: { title: '녹음이 없습니다', description: '안건과 메모만으로 회의록을 생성하거나, 녹음을 추가할 수 있습니다.', color: 'gray' },
 		uploaded: { title: '녹음 업로드 완료', description: '음성을 텍스트로 변환하려면 아래 버튼을 눌러주세요.', color: 'blue' },
 		processing: { title: '음성을 텍스트로 변환 중...', description: '잠시만 기다려주세요. 완료되면 자동으로 업데이트됩니다.', color: 'yellow' },
 		ready: { title: '변환 완료!', description: '회의록을 생성할 수 있습니다.', color: 'green' },
@@ -469,16 +469,29 @@
 					{#snippet children()}
 						<div class="empty-state">
 							{#if processingStatus === 'no_recordings'}
-								<!-- No recordings -->
-								<Mic class="w-16 h-16 mx-auto text-gray-300" />
+								<!-- No recordings - but can still generate from notes -->
+								<FileText class="w-16 h-16 mx-auto text-gray-400" />
 								<h3>{statusMessages.no_recordings.title}</h3>
 								<p>{statusMessages.no_recordings.description}</p>
-								<Button variant="primary" onclick={() => goto(`/meetings/${meetingId}/record`)}>
-									{#snippet children()}
-										<Mic class="w-4 h-4 mr-1" />
-										녹음 시작
-									{/snippet}
-								</Button>
+								<div class="flex gap-2 justify-center mt-4">
+									<Button variant="primary" onclick={handleGenerate} loading={$resultsStore.isGenerating}>
+										{#snippet children()}
+											<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+											</svg>
+											메모로 회의록 생성
+										{/snippet}
+									</Button>
+									<Button variant="secondary" onclick={() => goto(`/meetings/${meetingId}/record`)}>
+										{#snippet children()}
+											<Mic class="w-4 h-4 mr-1" />
+											녹음하기
+										{/snippet}
+									</Button>
+								</div>
+								<p class="text-xs text-gray-400 mt-3">
+									녹음 없이 생성하면 안건과 메모를 기반으로 요약합니다
+								</p>
 							{:else if processingStatus === 'uploaded'}
 								<!-- Uploaded but not processed -->
 								<FileAudio class="w-16 h-16 mx-auto text-blue-400" />

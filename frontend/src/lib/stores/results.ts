@@ -118,8 +118,16 @@ function createResultsStore() {
 				...state,
 				transcriptSegments: response.data?.segments || []
 			}));
-		} catch (error) {
-			console.error('Failed to load transcript:', error);
+		} catch (error: any) {
+			// 404 is expected when no transcript exists - don't log as error
+			if (error?.status !== 404 && error?.message !== 'Not Found') {
+				console.error('Failed to load transcript:', error);
+			}
+			// Set empty segments - this is normal when no recording was made
+			update((state) => ({
+				...state,
+				transcriptSegments: []
+			}));
 		}
 	}
 

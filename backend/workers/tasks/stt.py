@@ -98,15 +98,29 @@ def get_audio_duration(input_path: str) -> float:
     )
 
     # Parse duration from ffmpeg stderr (format: time=00:00:20.70)
+    # Find all time= matches and use the last one (final duration)
     import re
-    time_match = re.search(r'time=(\d+):(\d+):(\d+\.?\d*)', result.stderr)
-    if time_match:
-        hours = int(time_match.group(1))
-        minutes = int(time_match.group(2))
-        seconds = float(time_match.group(3))
+    time_matches = re.findall(r'time=(\d+):(\d+):(\d+\.?\d*)', result.stderr)
+    if time_matches:
+        # Use the last match which represents the final duration
+        last_match = time_matches[-1]
+        hours = int(last_match[0])
+        minutes = int(last_match[1])
+        seconds = float(last_match[2])
         duration = hours * 3600 + minutes * 60 + seconds
-        logger.info(f"Determined duration via ffmpeg: {duration:.1f}s")
-        return duration
+        if duration > 0:
+            logger.info(f"Determined duration via ffmpeg: {duration:.1f}s")
+            return duration
+
+    # Final fallback: estimate from file size (rough estimate for opus ~32kbps)
+    try:
+        file_size = os.path.getsize(input_path)
+        estimated_duration = file_size / 4000  # ~32kbps = 4000 bytes/sec
+        if estimated_duration > 1:
+            logger.warning(f"Using estimated duration from file size: {estimated_duration:.1f}s")
+            return estimated_duration
+    except Exception:
+        pass
 
     raise RuntimeError(f"Could not determine audio duration for {input_path}")
 
@@ -474,33 +488,128 @@ def process_recording(
             eta_seconds=num_chunks * 60,  # Rough estimate: 1 min per chunk
         )
 
-        # Process chunks in parallel with limited concurrency
-        logger.info(f"Processing {num_chunks} chunks (max parallel: {settings.STT_MAX_PARALLEL})")
+        # Process chunks sequentially (within same worker to access temp files)
+        # This is simpler and avoids temp file issues with distributed chord
+        from app.services.stt import transcribe_audio
 
-        # Create chunk tasks
-        chunk_tasks = []
+        chunk_results = []
         for i, chunk_path in enumerate(chunk_paths):
-            chunk_tasks.append(
-                process_audio_chunk.s(
-                    chunk_path=chunk_path,
-                    chunk_index=i,
-                    recording_id=recording_id,
-                    language=language,
-                )
+            logger.info(f"Processing chunk {i+1}/{num_chunks} for recording {recording_id}")
+
+            # Update progress
+            progress = 15 + int((i / num_chunks) * 75)
+            publish_progress(
+                recording_id=recording_id,
+                progress=progress,
+                status="transcribing",
+                message=f"Transcribing chunk {i+1}/{num_chunks}",
             )
 
-        # Execute as a chord: parallel chunk processing -> combine -> save
-        workflow = chord(chunk_tasks)(
-            chain(
-                combine_chunks.s(recording_id=recording_id),
-                save_transcript.s(),
-            )
+            try:
+                result = transcribe_audio(chunk_path, language=language)
+
+                # Adjust segment timestamps for this chunk
+                chunk_offset = i * settings.STT_CHUNK_MINUTES * 60
+                for segment in result["segments"]:
+                    segment["start"] += chunk_offset
+                    segment["end"] += chunk_offset
+
+                chunk_results.append({
+                    "chunk_index": i,
+                    "recording_id": recording_id,
+                    "segments": result["segments"],
+                    "text": result["text"],
+                    "language": result["language"],
+                    "duration": result["duration"],
+                })
+
+                logger.info(f"Chunk {i+1}/{num_chunks} complete: {len(result['segments'])} segments")
+
+            except Exception as e:
+                logger.error(f"Chunk {i} failed: {e}")
+                raise
+
+        # Combine results
+        logger.info(f"Combining {len(chunk_results)} chunks for recording {recording_id}")
+
+        sorted_results = sorted(chunk_results, key=lambda x: x["chunk_index"])
+        all_segments = []
+        all_text_parts = []
+        total_duration = 0
+
+        for result in sorted_results:
+            all_segments.extend(result["segments"])
+            all_text_parts.append(result["text"])
+            total_duration += result["duration"]
+
+        combined_result = {
+            "recording_id": recording_id,
+            "segments": all_segments,
+            "text": " ".join(all_text_parts),
+            "language": sorted_results[0]["language"] if sorted_results else "ko",
+            "duration": total_duration,
+            "num_chunks": len(chunk_results),
+        }
+
+        publish_progress(
+            recording_id=recording_id,
+            progress=95,
+            status="saving",
+            message="Saving transcript",
         )
 
-        # Get the result
-        result = workflow.get(timeout=settings.CELERY_TASK_TIME_LIMIT)
+        # Save to database
+        async def _save():
+            from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+            from sqlalchemy import select
+            from app.models import Recording, RecordingStatus, Transcript
 
-        return result
+            engine = create_async_engine(settings.ASYNC_DATABASE_URL)
+            async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Recording).where(Recording.id == recording_id)
+                )
+                recording = result.scalar_one_or_none()
+
+                if not recording:
+                    raise ValueError(f"Recording {recording_id} not found")
+
+                # Create transcript record
+                transcript = Transcript(
+                    recording_id=recording_id,
+                    meeting_id=recording.meeting_id,
+                    chunk_index=0,
+                    segments=combined_result["segments"],
+                )
+                session.add(transcript)
+
+                # Update recording status
+                recording.status = RecordingStatus.COMPLETED
+                recording.duration_seconds = int(combined_result["duration"])
+
+                await session.commit()
+                await session.refresh(transcript)
+
+                return transcript.id
+
+        transcript_id = asyncio.get_event_loop().run_until_complete(_save())
+
+        publish_progress(
+            recording_id=recording_id,
+            progress=100,
+            status="completed",
+            message="Transcription complete",
+        )
+
+        return {
+            "recording_id": recording_id,
+            "transcript_id": transcript_id,
+            "num_segments": len(combined_result["segments"]),
+            "duration": combined_result["duration"],
+            "status": "completed",
+        }
 
 
 @shared_task(

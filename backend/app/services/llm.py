@@ -145,29 +145,41 @@ Meeting Information:
         notes_text = f"\nManual Notes:\n{notes}" if notes else ""
         sketch_text = f"\nExtracted Sketch Text:\n{sketch_texts}" if sketch_texts else ""
 
+        # Handle missing or empty transcript
+        if transcript and transcript.strip():
+            transcript_section = f"STT Transcript:\n{transcript}"
+            transcript_status = "available"
+        else:
+            transcript_section = "STT Transcript:\n[녹음된 음성 내용 없음 - 메모와 안건만으로 요약 생성]"
+            transcript_status = "no_recording"
+
         prompt = f"""{meeting_info_text}
 Agenda Items:
 {agendas_text}
 
-STT Transcript:
-{transcript}
+{transcript_section}
 {notes_text}
 {sketch_text}
 
+Recording Status: {transcript_status}
+
 Requirements:
-1. Summarize discussion content for each agenda item
+1. Summarize discussion content for each agenda item based on available data
 2. Clearly identify decisions made
 3. Extract action items (assignee, content, due date if mentioned)
 4. Do not add information not present in the source materials
 5. Respond in JSON format only
-6. Analyze meeting atmosphere (positive/neutral/tense)
-7. Identify key turning points in the discussion
+6. If no transcript is available, base summary on meeting notes and agenda items only
+7. Analyze meeting atmosphere (positive/neutral/tense)
+8. Identify key turning points in the discussion
 8. Note consensus level (0-100)
 9. Summarize top 3 speaker contributions
 
 Output format:
 {{
   "summary": "Overall meeting summary",
+  "transcript_status": "available|no_recording|no_speech",
+  "data_sources": ["transcript", "notes", "agenda"],
   "discussions": [{{"agenda_idx": 0, "content": "..."}}, ...],
   "decisions": [{{"agenda_idx": 0, "content": "...", "type": "approved|postponed|rejected"}}, ...],
   "action_items": [{{"agenda_idx": 0, "assignee": "Name", "content": "...", "due_date": "YYYY-MM-DD or null", "priority": "high|medium|low"}}],
