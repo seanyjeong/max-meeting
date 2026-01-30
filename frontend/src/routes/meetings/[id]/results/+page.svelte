@@ -572,20 +572,35 @@
 									녹음 길이에 따라 수 분이 소요될 수 있습니다
 								</div>
 							{:else if processingStatus === 'ready'}
-								<!-- Ready to generate -->
-								<svg class="w-16 h-16 mx-auto text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-								</svg>
-								<h3>{statusMessages.ready.title}</h3>
-								<p>{statusMessages.ready.description}</p>
-								<Button variant="primary" onclick={handleGenerate} loading={$resultsStore.isGenerating}>
-									{#snippet children()}
-										<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-										</svg>
-										회의록 생성
-									{/snippet}
-								</Button>
+								<!-- Ready to generate - BIG CTA -->
+								<div class="ready-to-generate">
+									<svg class="w-20 h-20 mx-auto text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
+									<h2 class="text-xl font-bold text-gray-900 mt-4">음성 변환 완료!</h2>
+									<p class="text-gray-600 mt-2">이제 AI가 회의록을 작성합니다</p>
+
+									<button
+										type="button"
+										class="generate-button mt-6"
+										onclick={handleGenerate}
+										disabled={$resultsStore.isGenerating}
+									>
+										{#if $resultsStore.isGenerating}
+											<Loader2 class="w-6 h-6 animate-spin" />
+											<span>회의록 생성 중...</span>
+										{:else}
+											<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+											</svg>
+											<span>회의록 생성하기</span>
+										{/if}
+									</button>
+
+									<p class="text-xs text-gray-400 mt-4">
+										안건, 메모, 대화 내용을 분석하여 회의록을 자동 생성합니다
+									</p>
+								</div>
 							{:else if processingStatus === 'failed'}
 								<!-- Failed -->
 								<svg class="w-16 h-16 mx-auto text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -824,5 +839,36 @@
 	.progress-info {
 		display: flex;
 		justify-content: space-between;
+	}
+
+	.ready-to-generate {
+		padding: 2rem;
+		text-align: center;
+	}
+
+	.generate-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 1rem 2rem;
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: white;
+		background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+		border: none;
+		border-radius: 0.75rem;
+		cursor: pointer;
+		box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+		transition: all 0.2s;
+	}
+
+	.generate-button:hover:not(:disabled) {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+	}
+
+	.generate-button:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
 	}
 </style>
