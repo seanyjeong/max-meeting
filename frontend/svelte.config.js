@@ -7,7 +7,9 @@ const config = {
 
 	kit: {
 		adapter: adapter({
-			runtime: 'edge' // Edge runtime for faster cold starts
+			// Use serverless with reduced memory for faster cold starts
+			memory: 128,
+			maxDuration: 10
 		}),
 		alias: {
 			$lib: './src/lib'
