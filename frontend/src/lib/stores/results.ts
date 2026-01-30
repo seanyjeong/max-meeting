@@ -49,7 +49,7 @@ export interface AgendaDiscussion {
 	id: number;
 	agenda_id: number;
 	agenda_title: string;
-	agenda_order: number;
+	agenda_order: string;  // 계층형 순서 (예: "1.2.1")
 	summary: string;
 	key_points: string[] | null;
 }

@@ -246,13 +246,23 @@ def generate_meeting_result(
             parent_agendas = [a for a in meeting.agendas if a.parent_id is None]
             parent_agendas.sort(key=lambda a: a.order_num)
 
-            # Build child_order map for each parent
+            # Build child_order map for each parent (supports 3 levels)
             child_orders: dict[int, int] = {}  # agenda_id -> child_order (1-based)
+            hierarchical_orders: dict[int, str] = {}  # agenda_id -> hierarchical order string (e.g., "1.2.1")
+
             for parent in parent_agendas:
+                hierarchical_orders[parent.id] = str(parent.order_num)
                 children = [a for a in meeting.agendas if a.parent_id == parent.id]
                 children.sort(key=lambda a: a.order_num)
                 for i, child in enumerate(children, 1):
                     child_orders[child.id] = i
+                    hierarchical_orders[child.id] = f"{parent.order_num}.{i}"
+                    # 3레벨 손자안건 처리
+                    grandchildren = [a for a in meeting.agendas if a.parent_id == child.id]
+                    grandchildren.sort(key=lambda a: a.order_num)
+                    for j, grandchild in enumerate(grandchildren, 1):
+                        child_orders[grandchild.id] = j
+                        hierarchical_orders[grandchild.id] = f"{parent.order_num}.{i}.{j}"
 
             agenda_info = [
                 {
@@ -262,6 +272,7 @@ def generate_meeting_result(
                     "parent_id": agenda.parent_id,
                     "level": agenda.level,
                     "child_order": child_orders.get(agenda.id, agenda.order_num),
+                    "hierarchical_order": hierarchical_orders.get(agenda.id, str(agenda.order_num)),
                     "transcript": agenda_transcripts.get(agenda.id, ""),
                 }
                 for agenda in meeting.agendas
@@ -428,7 +439,7 @@ def generate_meeting_result(
             }
 
     try:
-        return asyncio.get_event_loop().run_until_complete(_generate())
+        return asyncio.run(_generate())
 
     except SoftTimeLimitExceeded:
         logger.error(f"LLM generation timed out for meeting {meeting_id}")
@@ -539,7 +550,7 @@ def generate_questions(
             }
 
     try:
-        return asyncio.get_event_loop().run_until_complete(_generate())
+        return asyncio.run(_generate())
 
     except Exception as e:
         logger.error(f"Question generation failed for agenda {agenda_id}: {e}")

@@ -232,6 +232,11 @@ async def get_meeting_discussions(
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
     from app.models import AgendaDiscussion, MeetingResult, Agenda
+    from app.services.meeting import MeetingService
+
+    # Verify meeting access
+    meeting_service = MeetingService(db)
+    await meeting_service.verify_meeting_access(meeting_id)
 
     # Get latest result
     result = await db.execute(
@@ -245,23 +250,59 @@ async def get_meeting_discussions(
     if not latest_result:
         return {"data": []}
 
+    # Get all agendas for the meeting to build hierarchy
+    from app.models import Meeting
+    meeting_result = await db.execute(
+        select(Meeting).where(Meeting.id == meeting_id)
+    )
+    meeting = meeting_result.scalar_one_or_none()
+    if not meeting:
+        return {"data": []}
+
+    # Build agenda hierarchy map (agenda_id -> hierarchical order string)
+    all_agendas_result = await db.execute(
+        select(Agenda)
+        .where(Agenda.meeting_id == meeting_id)
+        .order_by(Agenda.parent_id.nullsfirst(), Agenda.order_num)
+    )
+    all_agendas = list(all_agendas_result.scalars().all())
+
+    # Create a map of agenda_id to its data
+    agenda_map = {a.id: a for a in all_agendas}
+
+    def get_hierarchical_order(agenda_id: int) -> str:
+        """Build hierarchical order string like '1.2.1'"""
+        path = []
+        current = agenda_map.get(agenda_id)
+        while current:
+            path.append(str(current.order_num))
+            if current.parent_id:
+                current = agenda_map.get(current.parent_id)
+            else:
+                break
+        return ".".join(reversed(path))
+
     # Get discussions with agenda info
     discussions_result = await db.execute(
         select(AgendaDiscussion, Agenda)
         .join(Agenda, AgendaDiscussion.agenda_id == Agenda.id)
         .where(AgendaDiscussion.result_id == latest_result.id)
-        .order_by(Agenda.order_num)
+        .order_by(Agenda.level, Agenda.order_num)
     )
 
     discussions = []
     for disc, agenda in discussions_result:
+        hierarchical_order = get_hierarchical_order(agenda.id)
         discussions.append({
             "id": disc.id,
             "agenda_id": disc.agenda_id,
             "agenda_title": agenda.title,
-            "agenda_order": agenda.order_num,
+            "agenda_order": hierarchical_order,  # Now hierarchical like "1.2.1"
             "summary": disc.summary,
             "key_points": disc.key_points,
         })
+
+    # Sort by hierarchical order for proper display
+    discussions.sort(key=lambda d: [int(x) for x in d["agenda_order"].split(".")])
 
     return {"data": discussions}

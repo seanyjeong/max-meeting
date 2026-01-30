@@ -438,6 +438,7 @@
 
 	.agenda-tab-wrapper {
 		position: relative;
+		z-index: 10;
 	}
 
 	.child-dropdown {
@@ -445,14 +446,15 @@
 		top: 100%;
 		left: 0;
 		margin-top: 0.25rem;
-		min-width: 240px;
-		max-width: 320px;
+		min-width: 280px;
+		max-width: 400px;
+		max-height: 300px;
+		overflow-y: auto;
 		background: white;
 		border: 1px solid #e5e7eb;
 		border-radius: 0.5rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		z-index: 50;
-		overflow: hidden;
+		z-index: 100;
 	}
 
 	.child-item {

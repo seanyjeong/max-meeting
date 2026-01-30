@@ -3,6 +3,7 @@
 	 * RecordingsList - Display recording files with status and metadata
 	 */
 	import { Mic, Clock, FileAudio, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-svelte';
+	import { formatDateTime } from '$lib/utils/format';
 
 	interface Recording {
 		id: number;
@@ -38,15 +39,6 @@
 		if (bytes < 1024) return `${bytes} B`;
 		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	}
-
-	function formatDate(dateStr: string): string {
-		return new Date(dateStr).toLocaleString('ko-KR', {
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
 	}
 
 	function getStatusConfig(status: Recording['status']) {
@@ -116,7 +108,7 @@
 							<div class="item-meta">
 								<span class="meta-item">
 									<Clock class="w-3 h-3" />
-									{formatDate(recording.created_at)}
+									{formatDateTime(recording.created_at)}
 								</span>
 								{#if recording.duration_seconds}
 									<span class="meta-item">

@@ -81,7 +81,7 @@
 				type="button"
 				class="toolbar-btn"
 				onclick={() => insertMarkdown('# ')}
-				title="Heading 1"
+				title="제목 1"
 				disabled={readonly}
 			>
 				H1
@@ -90,7 +90,7 @@
 				type="button"
 				class="toolbar-btn"
 				onclick={() => insertMarkdown('## ')}
-				title="Heading 2"
+				title="제목 2"
 				disabled={readonly}
 			>
 				H2
@@ -99,7 +99,7 @@
 				type="button"
 				class="toolbar-btn"
 				onclick={() => insertMarkdown('### ')}
-				title="Heading 3"
+				title="제목 3"
 				disabled={readonly}
 			>
 				H3
@@ -113,7 +113,7 @@
 				type="button"
 				class="toolbar-btn"
 				onclick={() => insertMarkdown('**', '**')}
-				title="Bold"
+				title="굵게"
 				disabled={readonly}
 			>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -125,7 +125,7 @@
 				type="button"
 				class="toolbar-btn"
 				onclick={() => insertMarkdown('*', '*')}
-				title="Italic"
+				title="기울임"
 				disabled={readonly}
 			>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,7 +141,7 @@
 				type="button"
 				class="toolbar-btn"
 				onclick={() => insertMarkdown('- ')}
-				title="Bullet list"
+				title="목록"
 				disabled={readonly}
 			>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -152,7 +152,7 @@
 				type="button"
 				class="toolbar-btn"
 				onclick={() => insertMarkdown('1. ')}
-				title="Numbered list"
+				title="번호 목록"
 				disabled={readonly}
 			>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,7 +169,7 @@
 			class:active={showPreview}
 			onclick={togglePreview}
 		>
-			{showPreview ? 'Edit' : 'Preview'}
+			{showPreview ? '편집' : '미리보기'}
 		</button>
 	</div>
 
@@ -185,7 +185,7 @@
 				class="editor-textarea"
 				value={$resultsStore.editedSummary}
 				oninput={handleInput}
-				placeholder="Enter meeting summary in Markdown format..."
+				placeholder="회의 요약을 마크다운 형식으로 입력하세요..."
 				{readonly}
 				aria-label="Meeting summary editor"
 			></textarea>
@@ -195,7 +195,7 @@
 	<!-- Character count -->
 	<div class="editor-footer">
 		<span class="char-count">
-			{$resultsStore.editedSummary?.length || 0} characters
+			{$resultsStore.editedSummary?.length || 0}자
 		</span>
 	</div>
 </div>

@@ -5,6 +5,7 @@
 import { PUBLIC_API_URL } from '$env/static/public';
 import { refreshToken } from './stores/auth';
 import { goto } from '$app/navigation';
+import { logger } from './utils/logger';
 
 const API_BASE = PUBLIC_API_URL || '/api/v1';
 
@@ -42,12 +43,12 @@ class ApiClient {
 			const token = localStorage.getItem('accessToken');
 			if (token) {
 				headers['Authorization'] = `Bearer ${token}`;
-				console.log('[API] Authorization header added');
+				logger.debug('Authorization header added');
 			} else {
-				console.warn('[API] No access token found in localStorage');
+				logger.warn('No access token found in localStorage');
 			}
 		} else {
-			console.warn('[API] SSR environment - no access token available');
+			logger.warn('SSR environment - no access token available');
 		}
 
 		return headers;
@@ -58,25 +59,25 @@ class ApiClient {
 		options: RequestInit
 	): Promise<T> {
 		let response: Response;
-		console.log('[API] Request:', options.method, url);
+		logger.api('Request:', options.method, url);
 
 		try {
 			response = await fetch(url, options);
 		} catch (networkError) {
 			// 네트워크 오류 (서버 다운, CORS, 오프라인 등)
-			console.error('[API] Network error:', networkError);
+			logger.error('Network error:', networkError);
 			throw new ApiError('NETWORK_ERROR', '서버에 연결할 수 없습니다', 0);
 		}
 
-		console.log('[API] Response status:', response.status);
+		logger.debug('Response status:', response.status);
 
 		// Handle 401 Unauthorized
 		if (response.status === 401) {
-			console.log('[API] 401 received, attempting token refresh');
+			logger.debug('401 received, attempting token refresh');
 			const refreshSucceeded = await refreshToken();
 
 			if (refreshSucceeded) {
-				console.log('[API] Token refreshed, retrying request');
+				logger.debug('Token refreshed, retrying request');
 				// Update headers with new token
 				const newHeaders = this.getHeaders();
 				const retryOptions = {
@@ -88,7 +89,7 @@ class ApiClient {
 				try {
 					retryResponse = await fetch(url, retryOptions);
 				} catch (retryNetworkError) {
-					console.error('[API] Retry network error:', retryNetworkError);
+					logger.error('Retry network error:', retryNetworkError);
 					throw new ApiError('NETWORK_ERROR', '서버에 연결할 수 없습니다', 0);
 				}
 
@@ -98,7 +99,7 @@ class ApiClient {
 				}
 
 				if (retryResponse.status === 401) {
-					console.log('[API] Still 401 after refresh, redirecting to login');
+					logger.debug('Still 401 after refresh, redirecting to login');
 					goto('/login');
 					throw new ApiError('UNAUTHORIZED', '세션이 만료되었습니다', 401);
 				}
@@ -110,7 +111,7 @@ class ApiClient {
 
 				return retryResponse.json();
 			} else {
-				console.log('[API] Token refresh failed, redirecting to login');
+				logger.debug('Token refresh failed, redirecting to login');
 				goto('/login');
 				throw new ApiError('UNAUTHORIZED', '세션이 만료되었습니다', 401);
 			}
@@ -118,7 +119,7 @@ class ApiClient {
 
 		if (!response.ok) {
 			const errorData = await this.parseErrorResponse(response);
-			console.error('[API] Error response:', errorData);
+			logger.error('API Error response:', errorData);
 			throw new ApiError(errorData.code, errorData.message, response.status);
 		}
 
@@ -128,7 +129,7 @@ class ApiClient {
 		}
 
 		const jsonData = await response.json();
-		console.log('[API] Response data:', JSON.stringify(jsonData).slice(0, 200));
+		logger.api('Response data:', JSON.stringify(jsonData).slice(0, 200));
 		return jsonData;
 	}
 
@@ -222,7 +223,7 @@ class ApiClient {
 			headers['Authorization'] = `Bearer ${token}`;
 		}
 
-		console.log('[API] uploadChunk 시작:', {
+		logger.api('uploadChunk 시작:', {
 			recordingId,
 			offset,
 			chunkSize: chunk.size,
@@ -243,7 +244,7 @@ class ApiClient {
 			} catch {
 				error = { error: { message: `HTTP ${response.status}` } };
 			}
-			console.error('[API] uploadChunk 실패:', {
+			logger.error('uploadChunk 실패:', {
 				status: response.status,
 				error
 			});
@@ -255,7 +256,7 @@ class ApiClient {
 		}
 
 		const result = await response.json();
-		console.log('[API] uploadChunk 완료:', result);
+		logger.api('uploadChunk 완료:', result);
 		return result;
 	}
 }

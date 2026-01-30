@@ -158,6 +158,34 @@
 				visualizationStore.start(mediaRecorder);
 			}
 
+			// 새 녹음 시작 시 모든 안건의 time_segments 초기화
+			if (meeting) {
+				for (const agenda of meeting.agendas) {
+					if (agenda.time_segments && agenda.time_segments.length > 0) {
+						await api.patch(`/agendas/${agenda.id}`, { time_segments: [] });
+						updateLocalAgenda(agenda.id, { time_segments: [] });
+					}
+					// 자식안건도 초기화
+					if (agenda.children) {
+						for (const child of agenda.children) {
+							if (child.time_segments && child.time_segments.length > 0) {
+								await api.patch(`/agendas/${child.id}`, { time_segments: [] });
+								updateLocalAgenda(child.id, { time_segments: [] });
+							}
+							// 하하위안건도 초기화
+							if (child.children) {
+								for (const grandchild of child.children) {
+									if (grandchild.time_segments && grandchild.time_segments.length > 0) {
+										await api.patch(`/agendas/${grandchild.id}`, { time_segments: [] });
+										updateLocalAgenda(grandchild.id, { time_segments: [] });
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
 			// Start first agenda segment
 			if (meeting && meeting.agendas.length > 0) {
 				const agenda = meeting.agendas[currentAgendaIndex];
@@ -594,7 +622,7 @@
 	{#snippet footer()}
 		<div class="flex justify-end gap-3">
 			<Button variant="secondary" onclick={handleDiscardRecording} disabled={isUploading}>
-				다시 녹음
+				회의 재시작
 			</Button>
 			<Button variant="primary" onclick={handleConfirmRecording} disabled={isUploading}>
 				{#if isUploading}

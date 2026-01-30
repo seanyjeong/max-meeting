@@ -2,7 +2,7 @@
  * App version configuration
  * Update this when deploying new versions
  */
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.6.0';
 export const BUILD_DATE = '2026-01-30';
 
 // Version history (for reference)
@@ -10,6 +10,9 @@ export const BUILD_DATE = '2026-01-30';
 // 1.1.0 - SQLAlchemy 성능 개선, 결과 페이지 UX 개선, PWA 지원
 // 1.2.0 - STT 파이프라인 안정화, 녹음 없이 회의록 생성 지원, UI 용어 개선
 // 1.3.0 - UX 대폭 개선: 회의 마무리 버튼, 녹음 파일 목록, 디버그 패널, 진행률 표시
+// 1.4.0 - 계층형 안건 시스템, 3레벨 지원
+// 1.5.0 - 세그먼트-안건 매핑 개선, QA 버그 수정
+// 1.6.0 - 코드 품질 개선: 보안 수정, 유틸리티 통합, 로깅 개선
 
 export function getVersionInfo() {
 	return {

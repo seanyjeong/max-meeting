@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { meetings, isLoading, type Meeting } from '$lib/stores/meeting';
 	import { api } from '$lib/api';
+	import { formatDateTime } from '$lib/utils/format';
+	import { logger } from '$lib/utils/logger';
 
 	let recentMeetings: Meeting[] = [];
 	let upcomingMeetings: Meeting[] = [];
@@ -28,22 +30,11 @@
 
 			inProgressMeeting = response.data.find((m) => m.status === 'in_progress') || null;
 		} catch (error) {
-			console.error('Failed to load meetings:', error);
+			logger.error('Failed to load meetings:', error);
 		} finally {
 			isLoading.set(false);
 		}
 	});
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '-';
-		return new Date(dateStr).toLocaleDateString('ko-KR', {
-			year: 'numeric',
-			month: 'long',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
 
 	function getStatusBadgeClass(status: Meeting['status']): string {
 		switch (status) {
@@ -94,7 +85,7 @@
 				<div class="flex items-center justify-between">
 					<div>
 						<h3 class="font-medium text-gray-900">{inProgressMeeting.title}</h3>
-						<p class="text-sm text-gray-500">{formatDate(inProgressMeeting.scheduled_at)}</p>
+						<p class="text-sm text-gray-500">{formatDateTime(inProgressMeeting.scheduled_at)}</p>
 					</div>
 					<a href="/meetings/{inProgressMeeting.id}" class="btn btn-primary">
 						계속하기
@@ -118,7 +109,7 @@
 								<div class="flex items-center justify-between">
 									<div>
 										<h3 class="font-medium text-gray-900">{meeting.title}</h3>
-										<p class="text-sm text-gray-500">{formatDate(meeting.scheduled_at)}</p>
+										<p class="text-sm text-gray-500">{formatDateTime(meeting.scheduled_at)}</p>
 									</div>
 									<span
 										class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getStatusBadgeClass(
@@ -155,7 +146,7 @@
 								<div class="flex items-center justify-between">
 									<div>
 										<h3 class="font-medium text-gray-900">{meeting.title}</h3>
-										<p class="text-sm text-gray-500">{formatDate(meeting.scheduled_at)}</p>
+										<p class="text-sm text-gray-500">{formatDateTime(meeting.scheduled_at)}</p>
 									</div>
 									<span
 										class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getStatusBadgeClass(

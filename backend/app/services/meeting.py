@@ -148,6 +148,36 @@ class MeetingService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
+    async def verify_meeting_access(self, meeting_id: int) -> Meeting:
+        """
+        Verify that a meeting exists and is accessible.
+
+        This method should be called before any operation that requires
+        access to a meeting's data to ensure proper authorization.
+
+        Args:
+            meeting_id: The meeting's ID to verify.
+
+        Returns:
+            The meeting if found and accessible.
+
+        Raises:
+            HTTPException: 404 if meeting not found, 403 if access denied.
+
+        Note:
+            Currently this is a single-user system, so we only check existence.
+            For multi-user systems, add user_id parameter and ownership check.
+        """
+        from fastapi import HTTPException
+
+        meeting = await self.get_by_id(meeting_id)
+        if not meeting:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Meeting {meeting_id} not found"
+            )
+        return meeting
+
     async def create(self, data: MeetingCreate) -> Meeting:
         """
         Create a new meeting.

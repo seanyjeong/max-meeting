@@ -16,6 +16,8 @@
 	import { exportToPdf, copyToClipboard } from '$lib/utils/exportPdf';
 	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio, Mic, Loader2, Printer } from 'lucide-svelte';
 	import type { MeetingDetail } from '$lib/stores/meeting';
+	import { formatDateTime } from '$lib/utils/format';
+	import { logger } from '$lib/utils/logger';
 
 	// Recording status types (matches backend RecordingResponse)
 	interface Recording {
@@ -51,18 +53,24 @@
 
 	// Estimated progress based on time (STT: ~10x recording duration, LLM: ~60s)
 	let sttProgress = $derived.by(() => {
+		// 완료 상태면 100% 표시
+		if (processingStatus === 'ready') return 100;
 		if (!sttStartTime || processingStatus !== 'processing') return 0;
 		const elapsed = (currentTime - sttStartTime) / 1000; // seconds
 		const totalRecordingDuration = recordings.reduce((sum, r) => sum + (r.duration_seconds || 60), 0);
 		const estimatedTime = totalRecordingDuration * 10; // STT takes ~10x recording time
-		return Math.min(95, Math.round((elapsed / estimatedTime) * 100));
+		// 최대 99%까지만 표시 (완료 시 100%로 점프)
+		return Math.min(99, Math.max(1, Math.round((elapsed / estimatedTime) * 100)));
 	});
 
 	let generatingProgress = $derived.by(() => {
+		// 결과가 있으면 100% 표시
+		if ($hasResult && !$resultsStore.isGenerating) return 100;
 		if (!generatingStartTime || !$resultsStore.isGenerating) return 0;
 		const elapsed = (currentTime - generatingStartTime) / 1000;
 		const estimatedTime = 60; // LLM takes ~60 seconds
-		return Math.min(95, Math.round((elapsed / estimatedTime) * 100));
+		// 최대 99%까지만 표시 (완료 시 100%로 점프)
+		return Math.min(99, Math.max(1, Math.round((elapsed / estimatedTime) * 100)));
 	});
 
 	// Computed status
@@ -100,7 +108,7 @@
 			);
 			recordings = response.data;
 		} catch (error) {
-			console.error('Failed to load recordings status:', error);
+			logger.error('Failed to load recordings status:', error);
 		} finally {
 			recordingsLoading = false;
 		}
@@ -142,7 +150,7 @@
 				}, 3000); // Poll every 3 seconds
 			}
 		} catch (error) {
-			console.error('Failed to trigger STT:', error);
+			logger.error('Failed to trigger STT:', error);
 			toast.error('변환 시작에 실패했습니다.');
 		}
 	}
@@ -251,7 +259,7 @@
 					const response = await api.get<MeetingDetail>(`/meetings/${meetingId}`);
 					$currentMeeting = response;
 				} catch (error) {
-					console.error('Failed to load meeting:', error);
+					logger.error('Failed to load meeting:', error);
 					goto('/meetings');
 					throw error;
 				} finally {
@@ -299,7 +307,7 @@
 		// Auto-generate meeting result if meeting is completed and no result exists
 		// (for cases where user finished meeting without recording)
 		if ($currentMeeting?.status === 'completed' && !$hasResult && processingStatus === 'no_recordings') {
-			console.log('[results] Auto-generating meeting result (no recordings)');
+			logger.debug('[results] Auto-generating meeting result (no recordings)');
 			await handleGenerate();
 		}
 	});
@@ -351,17 +359,6 @@
 
 	function handleEdit() {
 		goto(`/meetings/${meetingId}/results/edit`);
-	}
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '';
-		return new Date(dateStr).toLocaleString('ko-KR', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
 	}
 </script>
 
@@ -555,7 +552,7 @@
 									{#if $resultsStore.currentResult}
 										<div class="summary-meta">
 											<span>버전 {$resultsStore.currentResult.version}</span>
-											<span>업데이트 {formatDate($resultsStore.currentResult.updated_at)}</span>
+											<span>업데이트 {formatDateTime($resultsStore.currentResult.updated_at)}</span>
 										</div>
 									{/if}
 								</div>
@@ -574,7 +571,7 @@
 										>
 											{#each $resultsStore.versions as version}
 												<option value={version.version}>
-													v{version.version} - {formatDate(version.created_at)}
+													v{version.version} - {formatDateTime(version.created_at)}
 												</option>
 											{/each}
 										</select>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Calendar, Clock, Users, ChevronRight } from 'lucide-svelte';
 	import type { Meeting } from '$lib/stores/meeting';
+	import { formatDate } from '$lib/utils/format';
 
 	interface Props {
 		meeting: Meeting;
@@ -11,16 +12,7 @@
 
 	let { meeting, isSelected = false, compact = false, onclick }: Props = $props();
 
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '-';
-		const date = new Date(dateStr);
-		return date.toLocaleDateString('ko-KR', {
-			month: 'short',
-			day: 'numeric'
-		});
-	}
-
-	function formatTime(dateStr: string | null): string {
+	function formatTimeLocal(dateStr: string | null): string {
 		if (!dateStr) return '';
 		const date = new Date(dateStr);
 		return date.toLocaleTimeString('ko-KR', {
@@ -78,7 +70,7 @@
 					</span>
 					<span class="inline-flex items-center gap-1">
 						<Clock class="w-3.5 h-3.5" />
-						{formatTime(meeting.scheduled_at)}
+						{formatTimeLocal(meeting.scheduled_at)}
 					</span>
 				{/if}
 			</div>

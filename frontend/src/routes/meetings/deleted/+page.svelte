@@ -4,6 +4,8 @@
 	import { getDeletedMeetings, restoreMeeting } from '$lib/api/meetings';
 	import type { Meeting } from '$lib/stores/meeting';
 	import { ArrowLeft } from 'lucide-svelte';
+	import { formatDate } from '$lib/utils/format';
+	import { logger } from '$lib/utils/logger';
 
 	let meetings: Meeting[] = [];
 	let isLoading = false;
@@ -25,7 +27,7 @@
 			meetings = response.data;
 			totalCount = response.meta?.total || 0;
 		} catch (error) {
-			console.error('Failed to load deleted meetings:', error);
+			logger.error('Failed to load deleted meetings:', error);
 		} finally {
 			isLoading = false;
 		}
@@ -40,18 +42,9 @@
 			meetings = meetings.filter((m) => m.id !== id);
 			totalCount--;
 		} catch (error) {
-			console.error('Failed to restore meeting:', error);
+			logger.error('Failed to restore meeting:', error);
 			alert('회의 복구에 실패했습니다.');
 		}
-	}
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '-';
-		return new Date(dateStr).toLocaleDateString('ko-KR', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
 	}
 
 	function getStatusBadgeClass(status: Meeting['status']): string {

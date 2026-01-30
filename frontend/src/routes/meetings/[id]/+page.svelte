@@ -10,6 +10,8 @@
 		isOffline
 	} from '$lib/stores/offlineCache';
 	import { Pencil, Trash2, X, Check, Plus } from 'lucide-svelte';
+	import { formatDateTime } from '$lib/utils/format';
+	import { logger } from '$lib/utils/logger';
 
 	let meetingId = $derived($page.params.id);
 
@@ -37,7 +39,7 @@
 			addingQuestionAgendaId = null;
 			await loadMeeting();
 		} catch (err) {
-			console.error('Failed to add question:', err);
+			logger.error('Failed to add question:', err);
 			error = '질문 추가에 실패했습니다.';
 		}
 	}
@@ -48,7 +50,7 @@
 			await api.delete(`/questions/${questionId}`);
 			await loadMeeting(); // 새로고침
 		} catch (err) {
-			console.error('Failed to delete question:', err);
+			logger.error('Failed to delete question:', err);
 			error = '질문 삭제에 실패했습니다.';
 		}
 	}
@@ -73,7 +75,7 @@
 			editingQuestionText = '';
 			await loadMeeting();
 		} catch (err) {
-			console.error('Failed to update question:', err);
+			logger.error('Failed to update question:', err);
 			error = '질문 수정에 실패했습니다.';
 		}
 	}
@@ -120,7 +122,7 @@
 			clearTimeout(timeoutId);
 			const errorObj = err as { code?: string; message?: string; name?: string };
 
-			if (import.meta.env.DEV) console.error('회의 데이터 로드 실패:', err);
+			logger.error('회의 데이터 로드 실패:', err);
 
 			// AbortError (타임아웃)
 			if (errorObj.name === 'AbortError') {
@@ -131,7 +133,7 @@
 
 			// 네트워크 에러 또는 오프라인일 경우 캐시에서 조회
 			if (isOffline() || errorObj.code === 'NETWORK_ERROR') {
-				if (import.meta.env.DEV) console.log('오프라인 모드: 캐시에서 데이터 조회');
+				logger.debug('오프라인 모드: 캐시에서 데이터 조회');
 				try {
 					if (meetingId) {
 						const cachedMeeting = await getCachedMeeting(parseInt(meetingId));
@@ -144,7 +146,7 @@
 						}
 					}
 				} catch (cacheErr) {
-					if (import.meta.env.DEV) console.error('캐시 조회 실패:', cacheErr);
+					logger.error('캐시 조회 실패:', cacheErr);
 					error = '회의 데이터를 불러올 수 없습니다';
 				}
 			} else {
@@ -162,7 +164,7 @@
 			await api.put(`/agendas/${agendaId}/questions`, {});
 			await loadMeeting();
 		} catch (err) {
-			console.error('Failed to generate questions:', err);
+			logger.error('Failed to generate questions:', err);
 		} finally {
 			isGeneratingQuestions = false;
 		}
@@ -175,22 +177,22 @@
 			await api.patch(`/meetings/${meetingId}`, { status: 'in_progress' });
 			goto(`/meetings/${meetingId}/record`);
 		} catch (err) {
-			console.error('Failed to start meeting:', err);
+			logger.error('Failed to start meeting:', err);
 		}
 	}
 
 	async function finishMeeting() {
 		if (!$currentMeeting) return;
 
-		console.log('[meeting] Finishing meeting:', meetingId);
+		logger.debug('[meeting] Finishing meeting:', meetingId);
 		try {
 			const response = await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
-			console.log('[meeting] Meeting finished, response:', response);
+			logger.debug('[meeting] Meeting finished, response:', response);
 			// Update local state
 			$currentMeeting = { ...$currentMeeting, status: 'completed' };
 			goto(`/meetings/${meetingId}/results`);
 		} catch (err) {
-			console.error('[meeting] Failed to finish meeting:', err);
+			logger.error('[meeting] Failed to finish meeting:', err);
 		}
 	}
 
@@ -202,7 +204,7 @@
 			await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
 			goto(`/meetings/${meetingId}/results`);
 		} catch (err) {
-			console.error('Failed to start without recording:', err);
+			logger.error('Failed to start without recording:', err);
 		}
 	}
 
@@ -213,19 +215,8 @@
 			await api.delete(`/meetings/${meetingId}`);
 			goto('/meetings');
 		} catch (err) {
-			console.error('Failed to delete meeting:', err);
+			logger.error('Failed to delete meeting:', err);
 		}
-	}
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '-';
-		return new Date(dateStr).toLocaleDateString('ko-KR', {
-			year: 'numeric',
-			month: 'long',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
 	}
 
 	function getStatusBadgeClass(status: string): string {
@@ -386,7 +377,7 @@
 			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
 					<dt class="text-sm font-medium text-gray-500">일시</dt>
-					<dd class="mt-1 text-sm text-gray-900">{formatDate($currentMeeting.scheduled_at)}</dd>
+					<dd class="mt-1 text-sm text-gray-900">{formatDateTime($currentMeeting.scheduled_at)}</dd>
 				</div>
 				<div>
 					<dt class="text-sm font-medium text-gray-500">장소</dt>
@@ -538,6 +529,35 @@
 																					<button onclick={() => deleteQuestion(question.id)} class="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="삭제">
 																						<Trash2 class="w-3.5 h-3.5" />
 																					</button>
+																				</div>
+																			{/if}
+																		</div>
+																	{/each}
+																</div>
+															{/if}
+															<!-- 손자안건 (3레벨) -->
+															{#if child.children && child.children.length > 0}
+																<div class="mt-3 space-y-2">
+																	<p class="text-xs font-semibold text-gray-500 uppercase">하위 안건</p>
+																	{#each child.children as grandchild, grandchildIndex (grandchild.id)}
+																		<div class="ml-2 p-2 bg-pink-50 rounded border border-pink-100">
+																			<div class="flex items-center gap-2">
+																				<span class="text-xs font-medium text-pink-600">
+																					{index + 1}.{childIndex + 1}.{grandchildIndex + 1}
+																				</span>
+																				<span class="text-sm text-gray-700">{grandchild.title}</span>
+																			</div>
+																			{#if grandchild.description}
+																				<p class="mt-1 text-xs text-gray-500 ml-6">{grandchild.description}</p>
+																			{/if}
+																			{#if grandchild.questions && grandchild.questions.length > 0}
+																				<div class="mt-2 ml-6 space-y-1">
+																					{#each grandchild.questions as gq (gq.id)}
+																						<div class="flex items-start gap-2 text-xs">
+																							<input type="checkbox" checked={gq.answered} disabled class="mt-0.5 h-3 w-3 rounded border-gray-300" />
+																							<span class="{gq.answered ? 'text-gray-400 line-through' : 'text-gray-600'}">{gq.question}</span>
+																						</div>
+																					{/each}
 																				</div>
 																			{/if}
 																		</div>

@@ -10,6 +10,18 @@ from app.schemas.contact import ContactCreate, ContactUpdate
 from app.services.encryption import encrypt_pii, decrypt_pii
 
 
+def escape_like(value: str) -> str:
+    """Escape special characters for LIKE pattern to prevent SQL injection.
+
+    Args:
+        value: The search string to escape.
+
+    Returns:
+        Escaped string safe for use in LIKE patterns.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class ContactService:
     """Service for managing contacts with PII encryption."""
 
@@ -43,9 +55,10 @@ class ContactService:
 
         # Add search filter if query provided
         if q:
-            # Use pg_trgm similarity search
+            # Use pg_trgm similarity search with escaped LIKE pattern
             # The index idx_contacts_name_trgm enables efficient trigram search
-            search_filter = Contact.name.ilike(f"%{q}%")
+            escaped_q = escape_like(q)
+            search_filter = Contact.name.ilike(f"%{escaped_q}%", escape="\\")
             base_query = base_query.where(search_filter)
 
         # Get total count

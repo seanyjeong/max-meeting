@@ -147,22 +147,14 @@ Meeting Information:
             agendas_parts = []
             for idx, info in enumerate(agenda_info):
                 agenda_id = info.get('id', idx)
-                parent_id = info.get('parent_id')
                 level = info.get('level', 0)
 
-                # Format: "### 안건 [ID:123] 1. 제목" or "### 안건 [ID:124] 1.1 자식 제목"
-                if level == 0:
-                    order_display = f"{info['order'] + 1}"
-                else:
-                    # Child agenda - find parent order
-                    parent_order = next(
-                        (a['order'] + 1 for a in agenda_info if a.get('id') == parent_id),
-                        info['order'] + 1
-                    )
-                    child_order = info.get('child_order', info['order'] + 1)
-                    order_display = f"{parent_order}.{child_order}"
+                # Use hierarchical_order if available, otherwise compute from order
+                order_display = info.get('hierarchical_order', str(info['order'] + 1))
 
-                agenda_text = f"\n### 안건 [ID:{agenda_id}] {order_display}: {info['title']}"
+                # 레벨에 따른 제목 형식 (들여쓰기로 구분)
+                indent = "  " * level
+                agenda_text = f"\n{indent}### 안건 [ID:{agenda_id}] {order_display}: {info['title']}"
                 if info.get('transcript'):
                     agenda_text += f"\n[해당 안건 대화 내용]\n{info['transcript']}"
                 else:
@@ -204,6 +196,8 @@ Requirements:
 6. 원본에 없는 내용을 추가하지 마세요
 7. JSON 형식으로만 응답하세요
 8. 각 안건에 대해 "[ID:숫자]"로 표시된 agenda_id를 반드시 사용하세요 (agenda_idx 대신)
+9. 모든 레벨의 안건(대안건, 하위안건, 하하위안건)을 포함하세요
+10. summary 필드에는 안건별 요약을 계층 구조로 작성하세요 (예: "## 1. 대안건\n### 1.1 하위안건\n...")
 
 Output format:
 {{

@@ -4,17 +4,13 @@
 	import { RefreshCw, X } from 'lucide-svelte';
 
 	let showUpdateBanner = $state(false);
-	let checkInterval: ReturnType<typeof setInterval> | null = null;
-
-	// Check for updates every 5 minutes
-	const CHECK_INTERVAL = 5 * 60 * 1000;
-
-	async function checkForUpdates() {
-		// 업데이트 알림 비활성화 - 사용자 요청
-		return;
-	}
+	let newWorker: ServiceWorker | null = null;
 
 	function handleUpdate() {
+		if (newWorker) {
+			// Tell the waiting service worker to activate
+			newWorker.postMessage({ type: 'SKIP_WAITING' });
+		}
 		// Force reload to get new version
 		window.location.reload();
 	}
@@ -32,23 +28,38 @@
 			return;
 		}
 
-		// Initial check after a short delay
-		setTimeout(checkForUpdates, 3000);
+		// Listen for service worker updates
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.ready.then((registration) => {
+				// Check if there's already a waiting worker
+				if (registration.waiting) {
+					newWorker = registration.waiting;
+					showUpdateBanner = true;
+				}
 
-		// Periodic checks
-		checkInterval = setInterval(checkForUpdates, CHECK_INTERVAL);
+				// Listen for new service workers
+				registration.addEventListener('updatefound', () => {
+					const installing = registration.installing;
+					if (installing) {
+						installing.addEventListener('statechange', () => {
+							if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+								// New service worker is installed and waiting
+								newWorker = installing;
+								showUpdateBanner = true;
+							}
+						});
+					}
+				});
+			});
 
-		// Also check when tab becomes visible
-		document.addEventListener('visibilitychange', () => {
-			if (document.visibilityState === 'visible') {
-				checkForUpdates();
-			}
-		});
-	});
-
-	onDestroy(() => {
-		if (checkInterval) {
-			clearInterval(checkInterval);
+			// Handle controller change (when skipWaiting is called)
+			let refreshing = false;
+			navigator.serviceWorker.addEventListener('controllerchange', () => {
+				if (!refreshing) {
+					refreshing = true;
+					window.location.reload();
+				}
+			});
 		}
 	});
 </script>

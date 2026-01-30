@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Button from './Button.svelte';
+	import { formatDateTime } from '$lib/utils/format';
 
 	interface ConflictData {
 		resourceType: 'meeting' | 'note' | 'sketch';
@@ -17,14 +18,6 @@
 	}
 
 	let { conflict, onResolve, onCancel }: Props = $props();
-
-	// 시간 포맷
-	function formatDate(date: Date): string {
-		return new Intl.DateTimeFormat('ko-KR', {
-			dateStyle: 'short',
-			timeStyle: 'short'
-		}).format(date);
-	}
 
 	// 데이터 차이 하이라이트를 위한 포맷팅
 	function formatData(data: unknown): string {
@@ -59,7 +52,7 @@
 						</span>
 					</div>
 					<p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-						수정 시간: {formatDate(conflict.localUpdatedAt)}
+						수정 시간: {formatDateTime(conflict.localUpdatedAt)}
 					</p>
 					<div class="bg-gray-100 dark:bg-gray-900 rounded p-3 text-sm overflow-auto max-h-96 font-mono">
 						<pre class="text-gray-800 dark:text-gray-200">{formatData(conflict.localData)}</pre>
@@ -77,7 +70,7 @@
 						</span>
 					</div>
 					<p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-						수정 시간: {formatDate(conflict.serverUpdatedAt)}
+						수정 시간: {formatDateTime(conflict.serverUpdatedAt)}
 					</p>
 					<div class="bg-gray-100 dark:bg-gray-900 rounded p-3 text-sm overflow-auto max-h-96 font-mono">
 						<pre class="text-gray-800 dark:text-gray-200">{formatData(conflict.serverData)}</pre>

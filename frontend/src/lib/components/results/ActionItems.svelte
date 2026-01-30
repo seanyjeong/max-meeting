@@ -2,6 +2,7 @@
 	import { resultsStore, type ActionItem } from '$lib/stores/results';
 	import Button from '$lib/components/Button.svelte';
 	import Badge from '$lib/components/Badge.svelte';
+	import { formatDate } from '$lib/utils/format';
 
 	interface Props {
 		meetingId: number;
@@ -81,7 +82,7 @@
 	}
 
 	async function handleDelete(itemId: number) {
-		if (!confirm('Are you sure you want to delete this action item?')) return;
+		if (!confirm('이 실행항목을 삭제하시겠습니까?')) return;
 		await resultsStore.deleteActionItem(itemId);
 	}
 
@@ -141,16 +142,6 @@
 		draggedItem = null;
 	}
 
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '';
-		const date = new Date(dateStr);
-		return date.toLocaleDateString('ko-KR', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
-	}
-
 	function isOverdue(dateStr: string | null): boolean {
 		if (!dateStr) return false;
 		return new Date(dateStr) < new Date();
@@ -159,7 +150,7 @@
 
 <div class="action-items">
 	<div class="header">
-		<h3 class="title">Action Items</h3>
+		<h3 class="title">실행 항목</h3>
 		{#if !readonly}
 			<Button
 				variant="primary"
@@ -170,7 +161,7 @@
 					<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
 					</svg>
-					Add Item
+					항목 추가
 				{/snippet}
 			</Button>
 		{/if}
@@ -183,7 +174,7 @@
 				<input
 					type="text"
 					class="form-input flex-1"
-					placeholder="Action item content..."
+					placeholder="실행할 내용을 입력하세요..."
 					bind:value={newItem.content}
 					required
 				/>
@@ -193,7 +184,7 @@
 				<input
 					type="text"
 					class="form-input"
-					placeholder="Assignee"
+					placeholder="담당자"
 					bind:value={newItem.assignee_name}
 				/>
 
@@ -204,26 +195,26 @@
 				/>
 
 				<select class="form-select" bind:value={newItem.priority}>
-					<option value="high">High</option>
-					<option value="medium">Medium</option>
-					<option value="low">Low</option>
+					<option value="high">높음</option>
+					<option value="medium">보통</option>
+					<option value="low">낮음</option>
 				</select>
 
 				{#if editingId}
 					<select class="form-select" bind:value={newItem.status}>
-						<option value="pending">Pending</option>
-						<option value="in_progress">In Progress</option>
-						<option value="completed">Completed</option>
+						<option value="pending">대기</option>
+						<option value="in_progress">진행중</option>
+						<option value="completed">완료</option>
 					</select>
 				{/if}
 			</div>
 
 			<div class="form-actions">
 				<Button variant="secondary" size="sm" onclick={resetForm}>
-					{#snippet children()}Cancel{/snippet}
+					{#snippet children()}취소{/snippet}
 				</Button>
 				<Button variant="primary" size="sm" type="submit">
-					{#snippet children()}{editingId ? 'Update' : 'Add'}{/snippet}
+					{#snippet children()}{editingId ? '수정' : '추가'}{/snippet}
 				</Button>
 			</div>
 		</form>

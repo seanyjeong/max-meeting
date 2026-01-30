@@ -356,7 +356,7 @@ def save_transcript(
 
             return transcript.id
 
-    transcript_id = asyncio.get_event_loop().run_until_complete(_save())
+    transcript_id = asyncio.run(_save())
 
     publish_progress(
         recording_id=recording_id,
@@ -439,7 +439,7 @@ def process_recording(
             }
 
     try:
-        recording_info = asyncio.get_event_loop().run_until_complete(_get_recording())
+        recording_info = asyncio.run(_get_recording())
     except Exception as e:
         logger.error(f"Failed to get recording info: {e}")
         raise
@@ -628,7 +628,7 @@ def process_recording(
 
                 return transcript.id
 
-        transcript_id = asyncio.get_event_loop().run_until_complete(_save())
+        transcript_id = asyncio.run(_save())
 
         publish_progress(
             recording_id=recording_id,
@@ -688,7 +688,7 @@ def reprocess_recording(
 
             await session.commit()
 
-    asyncio.get_event_loop().run_until_complete(_cleanup())
+    asyncio.run(_cleanup())
 
     # Trigger reprocessing
     return process_recording.delay(recording_id, language).id

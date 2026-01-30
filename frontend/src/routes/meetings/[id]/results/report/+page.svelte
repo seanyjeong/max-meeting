@@ -8,6 +8,8 @@
 	import { api } from '$lib/api';
 	import { ArrowLeft, Printer, Download, FileText, Image } from 'lucide-svelte';
 	import type { MeetingDetail, Agenda } from '$lib/stores/meeting';
+	import { formatDateTime } from '$lib/utils/format';
+	import { logger } from '$lib/utils/logger';
 
 	// Type definitions
 	interface Note {
@@ -48,7 +50,7 @@
 				const response = await api.get<MeetingDetail>(`/meetings/${meetingId}`);
 				$currentMeeting = response;
 			} catch (error) {
-				console.error('Failed to load meeting:', error);
+				logger.error('Failed to load meeting:', error);
 				goto('/meetings');
 				return;
 			} finally {
@@ -70,7 +72,7 @@
 			const response = await api.get<{ data: Note[] }>(`/meetings/${meetingId}/notes`);
 			notes = response.data || [];
 		} catch (error) {
-			console.error('Failed to load notes:', error);
+			logger.error('Failed to load notes:', error);
 		}
 	}
 
@@ -79,7 +81,7 @@
 			const response = await api.get<{ data: Sketch[] }>(`/meetings/${meetingId}/sketches`);
 			sketches = response.data || [];
 		} catch (error) {
-			console.error('Failed to load sketches:', error);
+			logger.error('Failed to load sketches:', error);
 		}
 	}
 
@@ -107,18 +109,6 @@
 
 	function handlePrint() {
 		window.print();
-	}
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '';
-		return new Date(dateStr).toLocaleString('ko-KR', {
-			year: 'numeric',
-			month: 'long',
-			day: 'numeric',
-			weekday: 'long',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
 	}
 
 	function openSketchModal(agendaId: number) {
@@ -205,7 +195,7 @@
 					{#if $currentMeeting.scheduled_at}
 						<div class="meta-item">
 							<span class="meta-label">일시</span>
-							<span class="meta-value">{formatDate($currentMeeting.scheduled_at)}</span>
+							<span class="meta-value">{formatDateTime($currentMeeting.scheduled_at)}</span>
 						</div>
 					{/if}
 					{#if $currentMeeting.location}

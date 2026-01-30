@@ -1,8 +1,24 @@
 /**
  * Auth Store - Authentication state management
+ *
+ * ⚠️ SECURITY NOTE:
+ * Tokens are stored in localStorage for simplicity.
+ * This is acceptable for this single-user internal system.
+ *
+ * For multi-user production systems, consider:
+ * - httpOnly cookies (prevents XSS token theft)
+ * - Memory storage + refresh on page load
+ * - Short-lived access tokens (current: 60min)
+ *
+ * Current mitigations:
+ * - CSP headers prevent inline scripts
+ * - No third-party scripts loaded
+ * - Token expiry: 60 minutes
+ * - Single-user system (no cross-user attack surface)
  */
 import { writable } from 'svelte/store';
 import { PUBLIC_API_URL } from '$env/static/public';
+import { logger } from '../utils/logger';
 
 const API_BASE = PUBLIC_API_URL || '/api/v1';
 
@@ -19,7 +35,7 @@ function getInitialState(): AuthState {
 		const refreshToken = localStorage.getItem('refreshToken');
 
 		if (accessToken) {
-			console.log('[AUTH_STORE] Restored auth state from localStorage');
+			logger.debug('Restored auth state from localStorage');
 			return {
 				isAuthenticated: true,
 				accessToken,
