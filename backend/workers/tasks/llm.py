@@ -103,13 +103,13 @@ def generate_meeting_result(
         async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
         async with async_session() as session:
-            # Create task tracking
+            # Create task tracking (meeting_id stored in result field since column doesn't exist)
             task = TaskTracking(
                 task_id=self.request.id,
                 task_type="llm_result",
-                meeting_id=meeting_id,
                 status=TaskStatusEnum.PROCESSING,
                 started_at=datetime.now(timezone.utc),
+                result={"meeting_id": meeting_id},  # Store meeting_id in result JSON
             )
             session.add(task)
             await session.commit()

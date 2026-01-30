@@ -210,22 +210,73 @@ function createResultsStore() {
 		update((state) => ({ ...state, isGenerating: true, error: null }));
 
 		try {
-			const response = await api.post<MeetingResult>(
+			// 1. First create an empty result record
+			const createResponse = await api.post<MeetingResult>(
 				`/meetings/${meetingId}/results`,
 				{ summary: '' }
 			);
 
 			update((state) => ({
 				...state,
-				currentResult: response,
-				editedSummary: response.summary || '',
-				isGenerating: false
+				currentResult: createResponse
 			}));
+
+			// 2. Then trigger LLM generation via regenerate endpoint
+			console.log('[results] Created result, triggering LLM generation...');
+			await api.post(`/results/${createResponse.id}/regenerate`, {});
+
+			// 3. Poll for completion (LLM runs in background via Celery)
+			let attempts = 0;
+			const maxAttempts = 60; // 3 minutes max (3s * 60)
+			const pollInterval = 3000;
+
+			const pollResult = async (): Promise<MeetingResult | null> => {
+				while (attempts < maxAttempts) {
+					attempts++;
+					await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+					try {
+						const response = await api.get<{ data: MeetingResult[] }>(
+							`/meetings/${meetingId}/results`
+						);
+						const results = response.data || [];
+						const latest = results[results.length - 1];
+
+						// Check if summary is populated (LLM completed)
+						if (latest && latest.summary && latest.summary.length > 0) {
+							console.log('[results] LLM generation completed');
+							return latest;
+						}
+						console.log(`[results] Waiting for LLM... (${attempts}/${maxAttempts})`);
+					} catch (e) {
+						console.error('[results] Poll error:', e);
+					}
+				}
+				return null;
+			};
+
+			const finalResult = await pollResult();
+
+			if (finalResult) {
+				update((state) => ({
+					...state,
+					currentResult: finalResult,
+					editedSummary: finalResult.summary || '',
+					isGenerating: false
+				}));
+			} else {
+				update((state) => ({
+					...state,
+					isGenerating: false,
+					error: '회의록 생성 시간이 초과되었습니다. 잠시 후 새로고침해주세요.'
+				}));
+			}
 		} catch (error) {
+			console.error('[results] Generate error:', error);
 			update((state) => ({
 				...state,
 				isGenerating: false,
-				error: 'Failed to generate result'
+				error: '회의록 생성에 실패했습니다.'
 			}));
 		}
 	}
@@ -241,25 +292,66 @@ function createResultsStore() {
 			});
 
 			if (!resultId) {
-				throw new Error('No result to regenerate');
+				throw new Error('재생성할 결과가 없습니다');
 			}
 
-			const response = await api.post<MeetingResult>(
-				`/results/${resultId}/regenerate`,
-				{}
-			);
+			// LLM 재생성 트리거 (Celery 백그라운드 작업)
+			console.log('[results] Triggering LLM regeneration...');
+			await api.post(`/results/${resultId}/regenerate`, {});
 
-			update((state) => ({
-				...state,
-				currentResult: response,
-				editedSummary: response.summary || '',
-				isGenerating: false
-			}));
+			// LLM 완료될 때까지 폴링
+			let attempts = 0;
+			const maxAttempts = 60; // 최대 3분 (3초 * 60)
+			const pollInterval = 3000;
+
+			const pollResult = async (): Promise<MeetingResult | null> => {
+				while (attempts < maxAttempts) {
+					attempts++;
+					await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+					try {
+						const response = await api.get<{ data: MeetingResult[] }>(
+							`/meetings/${meetingId}/results`
+						);
+						const results = response.data || [];
+						// 가장 최신 버전 가져오기
+						const latest = results.sort((a, b) => b.version - a.version)[0];
+
+						// 요약이 있으면 완료
+						if (latest && latest.summary && latest.summary.length > 0) {
+							console.log('[results] LLM 재생성 완료');
+							return latest;
+						}
+						console.log(`[results] LLM 대기 중... (${attempts}/${maxAttempts})`);
+					} catch (e) {
+						console.error('[results] 폴링 에러:', e);
+					}
+				}
+				return null;
+			};
+
+			const finalResult = await pollResult();
+
+			if (finalResult) {
+				update((state) => ({
+					...state,
+					currentResult: finalResult,
+					editedSummary: finalResult.summary || '',
+					isGenerating: false
+				}));
+			} else {
+				update((state) => ({
+					...state,
+					isGenerating: false,
+					error: '회의록 재생성 시간이 초과되었습니다. 잠시 후 새로고침해주세요.'
+				}));
+			}
 		} catch (error) {
+			console.error('[results] 재생성 에러:', error);
 			update((state) => ({
 				...state,
 				isGenerating: false,
-				error: 'Failed to regenerate result'
+				error: '회의록 재생성에 실패했습니다.'
 			}));
 		}
 	}

@@ -400,8 +400,19 @@
 		<!-- Generating indicator -->
 		{#if $resultsStore.isGenerating}
 			<div class="generating-banner">
-				<LoadingSpinner />
-				<span>회의 결과 생성 중... 잠시 기다려 주세요.</span>
+				<div class="flex items-center gap-3">
+					<Loader2 class="w-5 h-5 animate-spin text-blue-500" />
+					<div>
+						<p class="font-medium text-gray-800">AI가 회의록을 생성하고 있습니다...</p>
+						<p class="text-sm text-gray-500">
+							안건, 대화 내용, 메모를 분석하여 요약 및 실행 항목을 추출합니다.
+							보통 1-2분 정도 소요됩니다.
+						</p>
+					</div>
+				</div>
+				<div class="mt-3 w-full bg-gray-200 rounded-full h-2">
+					<div class="bg-blue-500 h-2 rounded-full animate-pulse" style="width: 60%"></div>
+				</div>
 			</div>
 		{/if}
 
