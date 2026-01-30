@@ -7,11 +7,11 @@
 | **Framework** | FastAPI |
 | **Port** | 9000 |
 | **Base URL** | `/api/v1` |
-| **Systemd** | `maxmeeting-api.service` |
+| **Systemd** | `maxmeeting-api.service`, `maxmeeting-worker.service` |
 | **Working Dir** | `/home/et/max-ops/max-meeting/backend` |
 | **Python** | 3.12 (venv: `.venv`) |
 
-## API 엔드포인트 (46개)
+## API 엔드포인트 (58개)
 
 ### Auth (4)
 | Method | Path | 설명 |
@@ -21,7 +21,7 @@
 | POST | `/auth/logout` | 로그아웃 |
 | GET | `/auth/me` | 현재 사용자 |
 
-### Meetings (9)
+### Meetings (8)
 | Method | Path | 설명 |
 |--------|------|------|
 | GET | `/meetings` | 목록 (paginated, filters) |
@@ -56,26 +56,32 @@
 | PATCH | `/questions/{id}` | 질문 수정 |
 | DELETE | `/questions/{id}` | 질문 삭제 |
 
-### Recordings (5)
+### Recordings (9)
 | Method | Path | 설명 |
 |--------|------|------|
-| POST | `/recordings/init` | 업로드 초기화 |
+| POST | `/meetings/{id}/recordings` | 녹음 생성 |
+| GET | `/meetings/{id}/recordings` | 녹음 목록 |
 | POST | `/recordings/{id}/upload` | 청크 업로드 |
+| POST | `/recordings/{id}/finalize` | 업로드 완료 |
+| POST | `/recordings/{id}/process` | STT 수동 트리거 |
 | GET | `/recordings/{id}` | 상세 |
-| GET | `/recordings/{id}/progress` | 진행률 |
+| GET | `/recordings/{id}/progress` | STT 진행률 (SSE) |
 | DELETE | `/recordings/{id}` | 삭제 |
+| GET | `/meetings/{id}/transcript` | 대화 내용 조회 |
 
-### Results (8)
+### Results (10)
 | Method | Path | 설명 |
 |--------|------|------|
 | GET | `/meetings/{id}/results` | 결과 버전 목록 |
-| POST | `/meetings/{id}/results/generate` | 요약 생성 |
+| POST | `/meetings/{id}/results` | 요약 생성 |
 | GET | `/results/{id}` | 결과 상세 |
 | PATCH | `/results/{id}` | 결과 수정 |
 | POST | `/results/{id}/verify` | 검증 완료 |
 | POST | `/results/{id}/regenerate` | 재생성 |
 | GET | `/meetings/{id}/action-items` | 액션아이템 |
 | POST | `/meetings/{id}/action-items` | 액션아이템 생성 |
+| PATCH | `/action-items/{id}` | 액션아이템 수정 |
+| DELETE | `/action-items/{id}` | 액션아이템 삭제 |
 
 ### Contacts (5)
 | Method | Path | 설명 |
@@ -86,14 +92,19 @@
 | PATCH | `/contacts/{id}` | 수정 |
 | DELETE | `/contacts/{id}` | 삭제 |
 
-### Notes & Sketches (6)
+### Notes (5)
 | Method | Path | 설명 |
 |--------|------|------|
 | GET | `/meetings/{id}/notes` | 노트 목록 |
 | POST | `/meetings/{id}/notes` | 노트 생성 |
+| GET | `/notes/{id}` | 노트 상세 |
 | PATCH | `/notes/{id}` | 노트 수정 |
 | DELETE | `/notes/{id}` | 노트 삭제 |
-| GET | `/sketches/{id}/export` | 스케치 내보내기 |
+
+### Sketches (1)
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/sketches/{id}/export` | PNG 내보내기 |
 
 ### Search (1)
 | Method | Path | 설명 |
@@ -104,9 +115,10 @@
 
 ```
 app/
-├── api/v1/           # 라우터
+├── api/v1/           # 라우터 (10개)
 │   ├── auth.py
 │   ├── meetings.py
+│   ├── meeting_types.py
 │   ├── agendas.py
 │   ├── recordings.py
 │   ├── results.py
@@ -114,17 +126,30 @@ app/
 │   ├── notes.py
 │   ├── sketches.py
 │   └── search.py
-├── models/           # SQLAlchemy 모델
-├── services/         # 비즈니스 로직
-│   ├── llm.py        # Gemini LLM
+├── models/           # SQLAlchemy 모델 (11개)
+├── services/         # 비즈니스 로직 (12개)
+│   ├── llm.py        # Gemini LLM (녹음 없이도 생성 가능)
 │   ├── stt.py        # faster-whisper
-│   └── encryption.py # PII 암호화
+│   ├── recording.py  # 녹음 관리
+│   ├── encryption.py # PII 암호화
+│   └── ...
 ├── core/
 │   ├── config.py     # Settings
 │   ├── security.py   # JWT
 │   └── deps.py       # 의존성
-└── workers/          # Celery 태스크
+└── workers/tasks/    # Celery 태스크
+    ├── stt.py        # STT 처리 (순차)
+    ├── llm.py        # LLM 생성
+    └── upload.py     # 업로드 처리
 ```
+
+## Celery 워커
+
+| Queue | 태스크 | 설명 |
+|-------|--------|------|
+| `stt` | `process_recording` | 녹음 → 대화 내용 변환 |
+| `llm` | `generate_meeting_result` | 회의록 LLM 생성 |
+| `upload` | `finalize_upload` | 업로드 완료 처리 |
 
 ## 환경변수 (주요)
 
@@ -143,8 +168,12 @@ JWT_REFRESH_EXPIRE_DAYS=7
 # LLM
 GEMINI_API_KEY=<key>
 
+# STT
+STT_CHUNK_MINUTES=10
+STT_MAX_PARALLEL=2
+
 # Storage
-STORAGE_PATH=/home/et/max-ops/max-meeting/data
+STORAGE_PATH=/data/max-meeting
 
 # PII
 PII_ENCRYPTION_KEY=<key>

@@ -5,6 +5,7 @@
 | 항목 | 값 |
 |------|-----|
 | **Framework** | SvelteKit 2 + Svelte 5 |
+| **Version** | v1.2.0 |
 | **Dev Port** | 5173 |
 | **Prod Port** | 3000 |
 | **Adapter** | adapter-vercel |
@@ -35,7 +36,7 @@ PUBLIC_API_URL=https://api.meeting.etlab.kr/api/v1
 | `/contacts/new` | `contacts/new/+page.svelte` | 연락처 생성 |
 | `/contacts/[id]` | `contacts/[id]/+page.svelte` | 연락처 상세 |
 
-## 주요 컴포넌트 (26개)
+## 주요 컴포넌트 (43개)
 
 ### 안건 편집
 | 컴포넌트 | 설명 |
@@ -56,7 +57,7 @@ PUBLIC_API_URL=https://api.meeting.etlab.kr/api/v1
 ### 결과 (`lib/components/results/`)
 | 컴포넌트 | 설명 |
 |----------|------|
-| `TranscriptViewer.svelte` | 녹취록 뷰어 |
+| `TranscriptViewer.svelte` | 대화 내용 뷰어 |
 | `SummaryEditor.svelte` | 요약 편집기 |
 | `SpeakerMapper.svelte` | 화자 매핑 |
 | `ActionItems.svelte` | 액션아이템 |
@@ -66,8 +67,18 @@ PUBLIC_API_URL=https://api.meeting.etlab.kr/api/v1
 |----------|------|
 | `SketchPad.svelte` | 스케치 패드 |
 | `TldrawWrapper.svelte` | tldraw React 브릿지 |
+| `SketchToolbar.svelte` | 스케치 도구 |
 
-### 공통
+### UI 컴포넌트 (`lib/components/ui/`)
+| 컴포넌트 | 설명 |
+|----------|------|
+| `Tabs.svelte` | 탭 네비게이션 |
+| `Skeleton.svelte` | 로딩 스켈레톤 |
+| `EmptyState.svelte` | 빈 상태 표시 |
+| `KeyboardShortcuts.svelte` | 키보드 단축키 |
+| `Tooltip.svelte` | 툴팁 |
+
+### 공통 컴포넌트
 | 컴포넌트 | 설명 |
 |----------|------|
 | `Card.svelte` | 카드 |
@@ -76,25 +87,26 @@ PUBLIC_API_URL=https://api.meeting.etlab.kr/api/v1
 | `Input.svelte` | 입력 |
 | `Badge.svelte` | 배지 |
 | `Toast.svelte` | 토스트 |
+| `ToastContainer.svelte` | 토스트 컨테이너 |
 | `LoadingSpinner.svelte` | 로딩 |
 | `Breadcrumb.svelte` | 브레드크럼 |
-| `DarkModeToggle.svelte` | 다크모드 |
-| `QuickJump.svelte` | 단축키 이동 |
-| `PreflightCheck.svelte` | 시스템 체크 |
-| `OfflineSyncManager.svelte` | 오프라인 동기화 |
+| `QuickJump.svelte` | 단축키 이동 (⌘K) |
+| `SkipLink.svelte` | 접근성 스킵 링크 |
+| `UpdateNotifier.svelte` | 버전 업데이트 알림 |
 
-## Stores (8개)
+## Stores (9개)
 
 | Store | 파일 | 설명 |
 |-------|------|------|
 | auth | `auth.ts` | 인증 상태 + refreshToken() |
 | meeting | `meeting.ts` | 회의 목록/상세 |
 | recording | `recording.ts` | 녹음 상태 + upload |
-| results | `results.ts` | 결과 상태 |
+| results | `results.ts` | 결과 상태 + 액션아이템 |
 | contacts | `contacts.ts` | 연락처 캐시 |
 | sketch | `sketch.ts` | 스케치 상태 |
 | toast | `toast.ts` | 토스트 큐 |
 | sync | `sync.ts` | 오프라인 (IndexedDB) |
+| keyboard | `keyboard.ts` | 키보드 단축키 |
 
 ## 주요 의존성
 
@@ -106,10 +118,18 @@ PUBLIC_API_URL=https://api.meeting.etlab.kr/api/v1
   "tailwindcss": "^3.4.0",
   "dompurify": "^3.3.1",
   "svelte-dnd-action": "^0.9.69",
+  "lucide-svelte": "^0.471.1",
   "react": "^19.2.4",
   "react-dom": "^19.2.4"
 }
 ```
+
+## PWA 지원
+
+- Service Worker (`static/sw.js`) - 오프라인 캐싱
+- Web App Manifest (`static/manifest.json`) - 설치 가능
+- IndexedDB - 오프라인 데이터 저장
+- UpdateNotifier - 새 버전 알림
 
 ## 빌드 & 배포
 
