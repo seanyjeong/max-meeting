@@ -651,7 +651,7 @@ async def refine_transcript(
 """
 
     try:
-        refined_text = await service.generate_text(
+        refined_text = await service._provider.generate_text(
             prompt=prompt,
             temperature=0.3,  # 낮은 temperature로 일관성 유지
             max_tokens=4096,
