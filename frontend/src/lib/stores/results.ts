@@ -45,11 +45,21 @@ export interface ResultVersion {
 	summary_preview: string;
 }
 
+export interface AgendaDiscussion {
+	id: number;
+	agenda_id: number;
+	agenda_title: string;
+	agenda_order: number;
+	summary: string;
+	key_points: string[] | null;
+}
+
 export interface ResultsState {
 	currentResult: MeetingResult | null;
 	versions: ResultVersion[];
 	selectedVersion: number | null;
 	actionItems: ActionItem[];
+	agendaDiscussions: AgendaDiscussion[];
 	transcriptSegments: TranscriptSegment[];
 	editMode: boolean;
 	editedSummary: string;
@@ -63,6 +73,7 @@ const initialState: ResultsState = {
 	versions: [],
 	selectedVersion: null,
 	actionItems: [],
+	agendaDiscussions: [],
 	transcriptSegments: [],
 	editMode: false,
 	editedSummary: '',
@@ -78,9 +89,10 @@ function createResultsStore() {
 		update((state) => ({ ...state, isLoading: true, error: null }));
 
 		try {
-			const [resultsResponse, actionItemsResponse] = await Promise.all([
+			const [resultsResponse, actionItemsResponse, discussionsResponse] = await Promise.all([
 				api.get<{ data: MeetingResult[] }>(`/meetings/${meetingId}/results`).catch(() => ({ data: [] })),
-				api.get<{ data: ActionItem[] }>(`/meetings/${meetingId}/action-items`).catch(() => ({ data: [] }))
+				api.get<{ data: ActionItem[] }>(`/meetings/${meetingId}/action-items`).catch(() => ({ data: [] })),
+				api.get<{ data: AgendaDiscussion[] }>(`/meetings/${meetingId}/discussions`).catch(() => ({ data: [] }))
 			]);
 
 			const results = resultsResponse.data || [];
@@ -96,6 +108,7 @@ function createResultsStore() {
 				currentResult: latestResult,
 				versions,
 				actionItems: actionItemsResponse.data || [],
+				agendaDiscussions: discussionsResponse.data || [],
 				selectedVersion: latestResult?.version ?? null,
 				editedSummary: latestResult?.summary ?? '',
 				isLoading: false

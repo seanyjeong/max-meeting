@@ -120,6 +120,18 @@ PUBLIC_API_URL=https://api.meeting.etlab.kr/api/v1
 
 ---
 
+## 코드 분석 (tldr)
+
+코드 탐색 시 tldr CLI 활용:
+```bash
+tldr structure backend/app --lang python   # 코드 구조
+tldr search "녹음" backend/                 # 키워드 검색
+tldr impact process_recording backend/      # 함수 영향도
+tldr calls backend/app/services/           # 호출 그래프
+```
+
+---
+
 ## 장애 대응
 
 | 증상 | 조치 |

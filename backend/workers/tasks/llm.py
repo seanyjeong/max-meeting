@@ -228,15 +228,17 @@ def generate_meeting_result(
             )
             session.add(meeting_result)
 
+            # Flush to get meeting_result.id
+            await session.flush()
+
             # Create agenda discussions
             for discussion in llm_result["discussions"]:
                 agenda_idx = discussion.get("agenda_idx", 0)
                 if agenda_idx < len(meeting.agendas):
                     agenda_disc = AgendaDiscussion(
+                        result_id=meeting_result.id,
                         agenda_id=meeting.agendas[agenda_idx].id,
-                        content=discussion["content"],
-                        is_llm_generated=True,
-                        version=new_version,
+                        summary=discussion["content"],  # DB uses 'summary' not 'content'
                     )
                     session.add(agenda_disc)
 
@@ -252,7 +254,7 @@ def generate_meeting_result(
                     decision_enum = DecisionType.APPROVED
 
                 meeting_decision = MeetingDecision(
-                    meeting_id=meeting_id,
+                    result_id=meeting_result.id,  # DB uses result_id not meeting_id
                     agenda_id=agenda_id,
                     content=decision["content"],
                     decision_type=decision_enum,

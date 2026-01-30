@@ -215,3 +215,53 @@ async def delete_action_item(
         await service.delete_action_item(action_item_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ============================================
+# Agenda Discussions Endpoints
+# ============================================
+
+
+@router.get("/meetings/{meeting_id}/discussions")
+async def get_meeting_discussions(
+    meeting_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Get agenda discussions for a meeting (from latest result)."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.models import AgendaDiscussion, MeetingResult, Agenda
+
+    # Get latest result
+    result = await db.execute(
+        select(MeetingResult)
+        .where(MeetingResult.meeting_id == meeting_id)
+        .order_by(MeetingResult.version.desc())
+        .limit(1)
+    )
+    latest_result = result.scalar_one_or_none()
+
+    if not latest_result:
+        return {"data": []}
+
+    # Get discussions with agenda info
+    discussions_result = await db.execute(
+        select(AgendaDiscussion, Agenda)
+        .join(Agenda, AgendaDiscussion.agenda_id == Agenda.id)
+        .where(AgendaDiscussion.result_id == latest_result.id)
+        .order_by(Agenda.order_num)
+    )
+
+    discussions = []
+    for disc, agenda in discussions_result:
+        discussions.append({
+            "id": disc.id,
+            "agenda_id": disc.agenda_id,
+            "agenda_title": agenda.title,
+            "agenda_order": agenda.order_num,
+            "summary": disc.summary,
+            "key_points": disc.key_points,
+        })
+
+    return {"data": discussions}

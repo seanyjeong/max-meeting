@@ -34,7 +34,7 @@
 	}
 
 	let meetingId = $derived(parseInt($page.params.id ?? '0'));
-	let activeTab = $state<'summary' | 'actions' | 'transcript'>('summary');
+	let activeTab = $state<'summary' | 'discussions' | 'actions' | 'transcript'>('summary');
 	let speakerMapping = $state<Record<string, number>>({});
 	let showShortcutsHelp = $state(false);
 
@@ -441,6 +441,19 @@
 					<button
 						type="button"
 						class="tab"
+						class:active={activeTab === 'discussions'}
+						role="tab"
+						aria-selected={activeTab === 'discussions'}
+						onclick={() => activeTab = 'discussions'}
+					>
+						안건별 토론
+						{#if $resultsStore.agendaDiscussions.length > 0}
+							<span class="tab-badge">{$resultsStore.agendaDiscussions.length}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="tab"
 						class:active={activeTab === 'actions'}
 						role="tab"
 						aria-selected={activeTab === 'actions'}
@@ -502,6 +515,42 @@
 								<SummaryEditor readonly />
 							{/snippet}
 						</Card>
+					{:else if activeTab === 'discussions'}
+						<!-- 안건별 토론 내용 -->
+						<div class="space-y-4">
+							{#if $resultsStore.agendaDiscussions.length === 0}
+								<Card>
+									{#snippet children()}
+										<div class="text-center py-8 text-gray-500">
+											안건별 토론 내용이 없습니다.
+										</div>
+									{/snippet}
+								</Card>
+							{:else}
+								{#each $resultsStore.agendaDiscussions as discussion}
+									<Card>
+										{#snippet children()}
+											<div class="discussion-item">
+												<div class="discussion-header">
+													<span class="discussion-order">{discussion.agenda_order}</span>
+													<h3 class="discussion-title">{discussion.agenda_title}</h3>
+												</div>
+												<div class="discussion-content">
+													<p>{discussion.summary}</p>
+													{#if discussion.key_points && discussion.key_points.length > 0}
+														<ul class="key-points">
+															{#each discussion.key_points as point}
+																<li>{point}</li>
+															{/each}
+														</ul>
+													{/if}
+												</div>
+											</div>
+										{/snippet}
+									</Card>
+								{/each}
+							{/if}
+						</div>
 					{:else if activeTab === 'actions'}
 						<ActionItems {meetingId} readonly />
 					{:else if activeTab === 'transcript'}
@@ -881,5 +930,59 @@
 	.generate-button:disabled {
 		opacity: 0.7;
 		cursor: not-allowed;
+	}
+
+	/* Discussion styles */
+	.discussion-item {
+		padding: 0.5rem 0;
+	}
+
+	.discussion-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.discussion-order {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		background: #dbeafe;
+		color: #1d4ed8;
+		border-radius: 50%;
+		font-size: 0.875rem;
+		font-weight: 600;
+		flex-shrink: 0;
+	}
+
+	.discussion-title {
+		font-size: 1rem;
+		font-weight: 600;
+		color: #111827;
+		margin: 0;
+	}
+
+	.discussion-content {
+		padding-left: 2.75rem;
+	}
+
+	.discussion-content p {
+		color: #374151;
+		line-height: 1.625;
+		margin: 0;
+	}
+
+	.key-points {
+		margin-top: 0.75rem;
+		padding-left: 1.25rem;
+		list-style: disc;
+	}
+
+	.key-points li {
+		color: #4b5563;
+		margin-bottom: 0.25rem;
 	}
 </style>
