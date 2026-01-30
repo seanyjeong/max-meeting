@@ -18,10 +18,8 @@
 
 	onMount(() => {
 		loadMeeting();
-		// 백그라운드에서 오프라인 캐싱
-		if (meetingId) {
-			prefetchMeetingData(parseInt(meetingId));
-		}
+		// prefetchMeetingData는 loadMeeting과 동일한 API를 호출하므로 제거
+		// 대신 loadMeeting 성공 후 캐싱은 offlineCache 내부에서 처리
 	});
 
 	async function loadMeeting() {

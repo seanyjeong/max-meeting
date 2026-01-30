@@ -118,23 +118,28 @@
 
 	onMount(async () => {
 		// Load meeting if not already loaded
-		if (!$currentMeeting || $currentMeeting.id !== meetingId) {
-			$isLoading = true;
-			try {
-				const response = await api.get<MeetingDetail>(`/meetings/${meetingId}`);
-				$currentMeeting = response;
-			} catch (error) {
-				console.error('Failed to load meeting:', error);
-				goto('/meetings');
-				return;
-			} finally {
-				$isLoading = false;
-			}
-		}
+		const meetingPromise = (!$currentMeeting || $currentMeeting.id !== meetingId)
+			? (async () => {
+				$isLoading = true;
+				try {
+					const response = await api.get<MeetingDetail>(`/meetings/${meetingId}`);
+					$currentMeeting = response;
+				} catch (error) {
+					console.error('Failed to load meeting:', error);
+					goto('/meetings');
+					throw error;
+				} finally {
+					$isLoading = false;
+				}
+			})()
+			: Promise.resolve();
 
-		// Load results
-		await resultsStore.loadResult(meetingId);
-		await resultsStore.loadTranscript(meetingId);
+		// Load results and transcript in parallel with meeting
+		await Promise.all([
+			meetingPromise,
+			resultsStore.loadResult(meetingId),
+			resultsStore.loadTranscript(meetingId)
+		]);
 	});
 
 	async function handleGenerate() {
