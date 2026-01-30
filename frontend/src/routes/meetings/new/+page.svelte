@@ -63,6 +63,9 @@
 	let isAutoPreviewEnabled = true;
 	let showAgendaEditor = false;
 
+	// Memoized editor items to prevent infinite loop
+	let editorItems = $derived(agendas.map(agendaToEditorItem));
+
 	// Helper functions for AgendaEditor integration
 	function agendaToEditorItem(a: AgendaInput): AgendaItem {
 		return {
@@ -781,7 +784,7 @@
 						</button>
 					</div>
 					<AgendaEditor
-						items={agendas.map(agendaToEditorItem)}
+						items={editorItems}
 						onItemsChange={handleEditorItemsChange}
 					/>
 				{:else}

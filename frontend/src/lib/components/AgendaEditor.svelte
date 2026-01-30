@@ -20,11 +20,16 @@
 
 	// Internal state - deep copy of items
 	let internalItems = $state<AgendaItem[]>([]);
+	let lastItemsJson = $state('');
 
-	// Sync internal state when prop changes
+	// Sync internal state when prop changes (with deep comparison to prevent infinite loop)
 	$effect(() => {
-		console.log('[AgendaEditor] Syncing from prop, items:', items?.length ?? 0);
-		internalItems = JSON.parse(JSON.stringify(items || []));
+		const newJson = JSON.stringify(items || []);
+		if (newJson !== lastItemsJson) {
+			console.log('[AgendaEditor] Syncing from prop, items:', items?.length ?? 0);
+			lastItemsJson = newJson;
+			internalItems = JSON.parse(newJson);
+		}
 	});
 
 	// Helper to ensure children array exists
