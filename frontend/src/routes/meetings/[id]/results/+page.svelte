@@ -566,7 +566,7 @@
 						{/if}
 
 						<!-- Transcript Viewer -->
-						<TranscriptViewer />
+						<TranscriptViewer agendas={$currentMeeting?.agendas || []} />
 					{/if}
 				</div>
 			{:else}

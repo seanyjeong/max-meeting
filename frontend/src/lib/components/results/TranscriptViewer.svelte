@@ -1,16 +1,19 @@
 <script lang="ts">
 	import { resultsStore, type TranscriptSegment } from '$lib/stores/results';
+	import type { Agenda } from '$lib/stores/meeting';
 	import DOMPurify from 'dompurify';
 
 	interface Props {
+		agendas?: Agenda[];
 		onSegmentClick?: (segment: TranscriptSegment) => void;
 		highlightText?: string;
 	}
 
-	let { onSegmentClick, highlightText = '' }: Props = $props();
+	let { agendas = [], onSegmentClick, highlightText = '' }: Props = $props();
 
 	let searchQuery = $state('');
 	let filterSpeaker = $state<string | null>(null);
+	let selectedAgendaId = $state<number | 'all'>('all');
 
 	// Get unique speakers
 	let speakers = $derived(
@@ -20,6 +23,29 @@
 		)] as string[]
 	);
 
+	// Check if segment is within agenda's time ranges
+	function isSegmentInAgenda(segment: TranscriptSegment, agenda: Agenda): boolean {
+		if (agenda.time_segments && agenda.time_segments.length > 0) {
+			return agenda.time_segments.some(
+				ts => segment.start >= ts.start && segment.start < (ts.end ?? Infinity)
+			);
+		}
+		// Fallback to started_at_seconds (legacy)
+		if (agenda.started_at_seconds !== null) {
+			// Find next agenda for end boundary
+			const sortedAgendas = agendas
+				.filter(a => a.started_at_seconds !== null)
+				.sort((a, b) => (a.started_at_seconds ?? 0) - (b.started_at_seconds ?? 0));
+			const idx = sortedAgendas.findIndex(a => a.id === agenda.id);
+			const startTime = agenda.started_at_seconds;
+			const endTime = idx >= 0 && idx + 1 < sortedAgendas.length
+				? sortedAgendas[idx + 1].started_at_seconds ?? Infinity
+				: Infinity;
+			return segment.start >= startTime && segment.start < endTime;
+		}
+		return false;
+	}
+
 	// Filter segments
 	let filteredSegments = $derived(
 		$resultsStore.transcriptSegments.filter(segment => {
@@ -28,9 +54,43 @@
 			const matchesSpeaker = !filterSpeaker ||
 				segment.speaker_label === filterSpeaker ||
 				segment.speaker_name === filterSpeaker;
-			return matchesSearch && matchesSpeaker;
+
+			// Agenda filter
+			let matchesAgenda = true;
+			if (selectedAgendaId !== 'all' && agendas.length > 0) {
+				const agenda = agendas.find(a => a.id === selectedAgendaId);
+				if (agenda) {
+					matchesAgenda = isSegmentInAgenda(segment, agenda);
+				}
+			}
+
+			return matchesSearch && matchesSpeaker && matchesAgenda;
 		})
 	);
+
+	// Calculate total duration for an agenda
+	function getAgendaDuration(agenda: Agenda): number {
+		if (agenda.time_segments && agenda.time_segments.length > 0) {
+			return agenda.time_segments.reduce((sum, seg) => {
+				const end = seg.end ?? 0;
+				return sum + Math.max(0, end - seg.start);
+			}, 0);
+		}
+		return 0;
+	}
+
+	function formatDuration(seconds: number): string {
+		if (seconds === 0) return '';
+		const mins = Math.floor(seconds / 60);
+		const secs = seconds % 60;
+		if (mins === 0) return `${secs}초`;
+		return `${mins}분`;
+	}
+
+	function truncate(text: string, maxLen: number): string {
+		if (text.length <= maxLen) return text;
+		return text.slice(0, maxLen - 1) + '…';
+	}
 
 	function formatTime(seconds: number): string {
 		const mins = Math.floor(seconds / 60);
@@ -42,7 +102,6 @@
 		const query = searchQuery || highlightText;
 		if (!query || !text) return DOMPurify.sanitize(text);
 
-		// First escape HTML entities
 		const escapedText = text
 			.replace(/&/g, '&amp;')
 			.replace(/</g, '&lt;')
@@ -50,12 +109,10 @@
 			.replace(/"/g, '&quot;')
 			.replace(/'/g, '&#39;');
 
-		// Then apply highlighting
 		const escapedQuery = escapeRegex(query);
 		const regex = new RegExp(`(${escapedQuery})`, 'gi');
 		const highlighted = escapedText.replace(regex, '<mark class="bg-yellow-200 rounded px-0.5">$1</mark>');
 
-		// Sanitize the result
 		return DOMPurify.sanitize(highlighted);
 	}
 
@@ -66,14 +123,8 @@
 	function getSpeakerColor(speaker: string | null): string {
 		if (!speaker) return '#6b7280';
 		const colors = [
-			'#3b82f6', // blue
-			'#22c55e', // green
-			'#f59e0b', // amber
-			'#ef4444', // red
-			'#8b5cf6', // violet
-			'#ec4899', // pink
-			'#06b6d4', // cyan
-			'#f97316'  // orange
+			'#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
+			'#8b5cf6', '#ec4899', '#06b6d4', '#f97316'
 		];
 		const index = speakers.indexOf(speaker);
 		return colors[index % colors.length];
@@ -85,9 +136,38 @@
 </script>
 
 <div class="transcript-viewer">
+	<!-- Agenda Tabs -->
+	{#if agendas.length > 0}
+		<div class="agenda-tabs">
+			<button
+				type="button"
+				class="agenda-tab {selectedAgendaId === 'all' ? 'active' : ''}"
+				onclick={() => selectedAgendaId = 'all'}
+			>
+				전체
+			</button>
+			{#each agendas as agenda (agenda.id)}
+				{@const duration = getAgendaDuration(agenda)}
+				{@const hasSegments = agenda.time_segments?.length || agenda.started_at_seconds !== null}
+				<button
+					type="button"
+					class="agenda-tab {selectedAgendaId === agenda.id ? 'active' : ''} {!hasSegments ? 'disabled' : ''}"
+					onclick={() => hasSegments && (selectedAgendaId = agenda.id)}
+					disabled={!hasSegments}
+				>
+					<span class="agenda-num">{agenda.order_num}.</span>
+					<span class="agenda-title">{truncate(agenda.title, 10)}</span>
+					{#if duration > 0}
+						<span class="agenda-duration">({formatDuration(duration)})</span>
+					{/if}
+				</button>
+			{/each}
+		</div>
+	{/if}
+
 	<!-- Header / Filters -->
 	<div class="viewer-header">
-		<h3 class="title">Transcript</h3>
+		<h3 class="title">대화 내용</h3>
 
 		<div class="filters">
 			<!-- Search -->
@@ -98,7 +178,7 @@
 				<input
 					type="text"
 					class="search-input"
-					placeholder="Search transcript..."
+					placeholder="검색..."
 					bind:value={searchQuery}
 				/>
 				{#if searchQuery}
@@ -121,7 +201,7 @@
 					class="speaker-filter"
 					bind:value={filterSpeaker}
 				>
-					<option value={null}>All speakers</option>
+					<option value={null}>전체 화자</option>
 					{#each speakers as speaker}
 						<option value={speaker}>{speaker}</option>
 					{/each}
@@ -161,12 +241,10 @@
 							class="segment-btn"
 							onclick={() => handleSegmentClick(segment)}
 						>
-							<!-- Timestamp -->
 							<span class="segment-time">
 								{formatTime(segment.start)}
 							</span>
 
-							<!-- Speaker -->
 							{#if segment.speaker_label || segment.speaker_name}
 								<span
 									class="segment-speaker"
@@ -176,12 +254,10 @@
 								</span>
 							{/if}
 
-							<!-- Text -->
 							<span class="segment-text">
 								{@html highlightSearchText(segment.text)}
 							</span>
 
-							<!-- Confidence indicator (if available) -->
 							{#if segment.confidence !== undefined && segment.confidence < 0.7}
 								<span class="confidence-warning" title="Low confidence: {Math.round(segment.confidence * 100)}%">
 									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,7 +282,7 @@
 				<svg class="w-12 h-12 mx-auto text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
 				</svg>
-				<p>No matching segments found</p>
+				<p>검색 결과가 없습니다</p>
 			</div>
 		{/if}
 	</div>
@@ -215,10 +291,10 @@
 	{#if $resultsStore.transcriptSegments.length > 0}
 		<div class="viewer-footer">
 			<span class="stat">
-				{filteredSegments.length} / {$resultsStore.transcriptSegments.length} segments
+				{filteredSegments.length} / {$resultsStore.transcriptSegments.length} 세그먼트
 			</span>
 			{#if speakers.length > 0}
-				<span class="stat">{speakers.length} speakers</span>
+				<span class="stat">{speakers.length}명 화자</span>
 			{/if}
 		</div>
 	{/if}
@@ -232,6 +308,66 @@
 		border-radius: 0.5rem;
 		border: 1px solid #e5e7eb;
 		overflow: hidden;
+	}
+
+	/* Agenda Tabs */
+	.agenda-tabs {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		background: #f0f9ff;
+		border-bottom: 1px solid #e5e7eb;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.agenda-tabs::-webkit-scrollbar {
+		display: none;
+	}
+
+	.agenda-tab {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #e5e7eb;
+		border-radius: 9999px;
+		background: white;
+		font-size: 0.8125rem;
+		white-space: nowrap;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.agenda-tab:hover:not(.disabled) {
+		border-color: #3b82f6;
+		background: #eff6ff;
+	}
+
+	.agenda-tab.active {
+		border-color: #3b82f6;
+		background: #3b82f6;
+		color: white;
+	}
+
+	.agenda-tab.disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.agenda-num {
+		font-weight: 600;
+	}
+
+	.agenda-title {
+		max-width: 100px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.agenda-duration {
+		font-size: 0.75rem;
+		opacity: 0.7;
 	}
 
 	.viewer-header {
@@ -276,7 +412,7 @@
 		border: 1px solid #d1d5db;
 		border-radius: 0.375rem;
 		font-size: 0.875rem;
-		width: 200px;
+		width: 160px;
 	}
 
 	.search-input:focus {
@@ -439,7 +575,6 @@
 		color: #6b7280;
 	}
 
-	/* Touch-friendly */
 	@media (pointer: coarse) {
 		.segment-btn {
 			padding: 1rem;
@@ -447,6 +582,10 @@
 
 		.search-input {
 			padding: 0.5rem 0.5rem 0.5rem 2rem;
+		}
+
+		.agenda-tab {
+			padding: 0.625rem 1rem;
 		}
 	}
 </style>
