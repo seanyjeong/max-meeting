@@ -1,7 +1,20 @@
 <script lang="ts">
 	import { resultsStore, type TranscriptSegment } from '$lib/stores/results';
 	import type { Agenda } from '$lib/stores/meeting';
+	import { currentMeeting } from '$lib/stores/meeting';
+	import { api } from '$lib/api';
 	import DOMPurify from 'dompurify';
+
+	interface SegmentSuggestion {
+		segment_index: number;
+		segment_text: string;
+		current_agenda_id: number | null;
+		current_agenda_title: string | null;
+		suggested_agenda_id: number | null;
+		suggested_agenda_title: string | null;
+		confidence: number;
+		reason: string;
+	}
 
 	interface Props {
 		agendas?: Agenda[];
@@ -10,6 +23,12 @@
 	}
 
 	let { agendas = [], onSegmentClick, highlightText = '' }: Props = $props();
+
+	// Segment analysis state
+	let suggestions = $state<SegmentSuggestion[]>([]);
+	let isAnalyzing = $state(false);
+	let analysisError = $state<string | null>(null);
+	let showSuggestions = $state(true);
 
 	// Filter to only root-level agendas (parent_id is null/undefined)
 	let rootAgendas = $derived(agendas.filter(a => a.parent_id === null || a.parent_id === undefined));
@@ -203,6 +222,67 @@
 			return () => document.removeEventListener('click', handleClickOutside);
 		}
 	});
+
+	// Get suggestion for a segment by index
+	function getSuggestion(segmentIndex: number): SegmentSuggestion | undefined {
+		return suggestions.find(s => s.segment_index === segmentIndex);
+	}
+
+	// Analyze segments for mismatches
+	async function analyzeSegments() {
+		const meetingId = $currentMeeting?.id;
+		if (!meetingId) return;
+
+		isAnalyzing = true;
+		analysisError = null;
+
+		try {
+			const response = await api.post(`/meetings/${meetingId}/analyze-segments`, {
+				force_reanalyze: false
+			}) as { suggestions: SegmentSuggestion[] };
+			suggestions = response.suggestions || [];
+		} catch (error: any) {
+			console.error('Segment analysis failed:', error);
+			analysisError = error.message || '분석에 실패했습니다';
+		} finally {
+			isAnalyzing = false;
+		}
+	}
+
+	// Accept a suggestion and move segment
+	async function acceptSuggestion(suggestion: SegmentSuggestion) {
+		const meetingId = $currentMeeting?.id;
+		if (!meetingId || !suggestion.suggested_agenda_id) return;
+
+		try {
+			await api.patch(`/meetings/${meetingId}/segments/${suggestion.segment_index}/move`, {
+				target_agenda_id: suggestion.suggested_agenda_id,
+				accept_suggestion: true
+			});
+			// Remove from suggestions list
+			suggestions = suggestions.filter(s => s.segment_index !== suggestion.segment_index);
+		} catch (error: any) {
+			console.error('Move segment failed:', error);
+			alert('세그먼트 이동에 실패했습니다: ' + (error.message || ''));
+		}
+	}
+
+	// Reject a suggestion
+	async function rejectSuggestion(suggestion: SegmentSuggestion) {
+		const meetingId = $currentMeeting?.id;
+		if (!meetingId) return;
+
+		try {
+			await api.patch(`/meetings/${meetingId}/segments/${suggestion.segment_index}/move`, {
+				target_agenda_id: suggestion.current_agenda_id || 0,
+				accept_suggestion: false
+			});
+			// Remove from suggestions list
+			suggestions = suggestions.filter(s => s.segment_index !== suggestion.segment_index);
+		} catch (error: any) {
+			console.error('Reject suggestion failed:', error);
+		}
+	}
 </script>
 
 <div class="transcript-viewer">
@@ -265,6 +345,46 @@
 			{/each}
 		</div>
 	{/if}
+
+	<!-- Analysis Controls -->
+	<div class="analysis-controls">
+		<button
+			type="button"
+			class="analyze-btn"
+			onclick={analyzeSegments}
+			disabled={isAnalyzing}
+		>
+			{#if isAnalyzing}
+				<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+				</svg>
+				분석 중...
+			{:else}
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+				</svg>
+				안건 재매칭 분석
+			{/if}
+		</button>
+
+		{#if suggestions.length > 0}
+			<span class="suggestion-count">
+				{suggestions.length}개 제안
+			</span>
+			<button
+				type="button"
+				class="toggle-suggestions"
+				onclick={() => showSuggestions = !showSuggestions}
+			>
+				{showSuggestions ? '제안 숨기기' : '제안 표시'}
+			</button>
+		{/if}
+
+		{#if analysisError}
+			<span class="analysis-error">{analysisError}</span>
+		{/if}
+	</div>
 
 	<!-- Header / Filters -->
 	<div class="viewer-header">
@@ -336,7 +456,9 @@
 		{#if filteredSegments.length > 0}
 			<ul class="segments-list" role="list">
 				{#each filteredSegments as segment, index (segment.id || index)}
-					<li class="segment">
+					{@const globalIndex = $resultsStore.transcriptSegments.findIndex(s => s === segment)}
+					{@const suggestion = getSuggestion(globalIndex)}
+					<li class="segment {suggestion && showSuggestions ? 'has-suggestion' : ''}">
 						<button
 							type="button"
 							class="segment-btn"
@@ -367,6 +489,35 @@
 								</span>
 							{/if}
 						</button>
+
+						<!-- Suggestion Badge -->
+						{#if suggestion && showSuggestions}
+							<div class="suggestion-badge">
+								<div class="suggestion-info">
+									<span class="suggestion-icon">💡</span>
+									<span class="suggestion-text">
+										이 대화는 <strong>[{suggestion.suggested_agenda_title}]</strong>에 해당하는 것 같습니다
+										<span class="suggestion-confidence">({Math.round(suggestion.confidence * 100)}%)</span>
+									</span>
+								</div>
+								<div class="suggestion-actions">
+									<button
+										type="button"
+										class="suggestion-accept"
+										onclick={() => acceptSuggestion(suggestion)}
+									>
+										이동
+									</button>
+									<button
+										type="button"
+										class="suggestion-reject"
+										onclick={() => rejectSuggestion(suggestion)}
+									>
+										유지
+									</button>
+								</div>
+							</div>
+						{/if}
 					</li>
 				{/each}
 			</ul>
@@ -731,6 +882,149 @@
 		color: #6b7280;
 	}
 
+	/* Analysis Controls */
+	.analysis-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem 1rem;
+		background: #fefce8;
+		border-bottom: 1px solid #fef08a;
+	}
+
+	.analyze-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.75rem;
+		border: 1px solid #eab308;
+		border-radius: 0.375rem;
+		background: white;
+		color: #854d0e;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.analyze-btn:hover:not(:disabled) {
+		background: #fef9c3;
+		border-color: #ca8a04;
+	}
+
+	.analyze-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.suggestion-count {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: #ca8a04;
+		background: #fef9c3;
+		padding: 0.25rem 0.5rem;
+		border-radius: 9999px;
+	}
+
+	.toggle-suggestions {
+		font-size: 0.75rem;
+		color: #854d0e;
+		background: none;
+		border: none;
+		cursor: pointer;
+		text-decoration: underline;
+	}
+
+	.toggle-suggestions:hover {
+		color: #713f12;
+	}
+
+	.analysis-error {
+		font-size: 0.75rem;
+		color: #dc2626;
+	}
+
+	/* Segment with suggestion */
+	.segment.has-suggestion {
+		background: #fffbeb;
+		border-left: 3px solid #f59e0b;
+	}
+
+	.suggestion-badge {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		background: #fef3c7;
+		border-top: 1px dashed #fcd34d;
+	}
+
+	.suggestion-info {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+	}
+
+	.suggestion-icon {
+		font-size: 1rem;
+		flex-shrink: 0;
+	}
+
+	.suggestion-text {
+		font-size: 0.8125rem;
+		color: #78350f;
+		line-height: 1.4;
+	}
+
+	.suggestion-text strong {
+		color: #b45309;
+	}
+
+	.suggestion-confidence {
+		font-size: 0.75rem;
+		color: #92400e;
+		opacity: 0.8;
+	}
+
+	.suggestion-actions {
+		display: flex;
+		gap: 0.5rem;
+		padding-left: 1.5rem;
+	}
+
+	.suggestion-accept {
+		padding: 0.25rem 0.75rem;
+		border: none;
+		border-radius: 0.25rem;
+		background: #f59e0b;
+		color: white;
+		font-size: 0.75rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.suggestion-accept:hover {
+		background: #d97706;
+	}
+
+	.suggestion-reject {
+		padding: 0.25rem 0.75rem;
+		border: 1px solid #d1d5db;
+		border-radius: 0.25rem;
+		background: white;
+		color: #6b7280;
+		font-size: 0.75rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.suggestion-reject:hover {
+		background: #f3f4f6;
+		border-color: #9ca3af;
+	}
+
 	@media (pointer: coarse) {
 		.segment-btn {
 			padding: 1rem;
@@ -742,6 +1036,20 @@
 
 		.agenda-tab {
 			padding: 0.625rem 1rem;
+		}
+
+		.suggestion-badge {
+			padding: 1rem;
+		}
+
+		.suggestion-actions {
+			padding-left: 0;
+		}
+
+		.suggestion-accept,
+		.suggestion-reject {
+			padding: 0.5rem 1rem;
+			font-size: 0.8125rem;
 		}
 	}
 </style>
