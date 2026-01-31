@@ -64,6 +64,11 @@
 </script>
 
 <div class="space-y-8">
+	<!-- Logo -->
+	<div class="flex justify-center py-4">
+		<img src="/maxmeeting-final.png" alt="MAX Meeting" class="h-24 w-auto" />
+	</div>
+
 	<div class="flex justify-between items-center">
 		<h1 class="text-2xl font-bold text-gray-900">대시보드</h1>
 		<a href="/meetings/new" class="btn btn-primary">
