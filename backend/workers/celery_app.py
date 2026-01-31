@@ -6,6 +6,7 @@ Uses task_acks_late=True for reliability (spec Section 6).
 """
 
 from celery import Celery
+from celery.schedules import crontab
 from kombu import Exchange, Queue
 
 from app.config import get_settings
@@ -72,6 +73,15 @@ celery_app.conf.update(
     task_default_queue="celery",
     task_default_exchange="celery",
     task_default_routing_key="celery",
+
+    # Beat schedule for periodic tasks
+    beat_schedule={
+        "cleanup-old-recordings": {
+            "task": "workers.tasks.cleanup.cleanup_old_recordings",
+            "schedule": crontab(hour=3, minute=0),  # 매일 새벽 3시
+            "args": (3,),  # 3일 유예
+        },
+    },
 )
 
 # Auto-discover tasks
