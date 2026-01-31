@@ -6,7 +6,7 @@
 
 | 구분 | 값 |
 |------|-----|
-| **Version** | v1.3.0 (2026-01-30) |
+| **Version** | v1.13.0 (2026-01-31) |
 | **Backend** | FastAPI @ `localhost:9000` |
 | **Frontend** | SvelteKit @ Vercel (`max-meeting.vercel.app`) |
 | **DB** | PostgreSQL @ `localhost:5432/maxmeeting` |
@@ -127,6 +127,21 @@ STORAGE_PATH=/data/max-meeting
 ```bash
 PUBLIC_API_URL=https://api.meeting.etlab.kr/api/v1
 ```
+
+---
+
+## 배포 체크리스트
+
+**⚠️ 기능 배포 시 반드시 확인:**
+
+1. **프론트엔드 버전 업데이트** - `frontend/src/lib/version.ts`
+   - `APP_VERSION` 변경 (UI에 표시됨)
+   - `BUILD_DATE` 업데이트
+   - 버전 히스토리 주석 추가
+
+2. **백엔드 재시작** - `sudo systemctl restart maxmeeting-api`
+
+3. **Git 커밋 & 푸시** - Vercel 자동 배포 트리거
 
 ---
 
