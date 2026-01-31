@@ -53,29 +53,18 @@
 	}
 
 	// 재귀적으로 안건과 모든 자손 안건을 체크
-	function isSegmentInAgendaRecursive(segment: TranscriptSegment, agenda: Agenda, depth = 0): boolean {
+	function isSegmentInAgendaRecursive(segment: TranscriptSegment, agenda: Agenda): boolean {
 		// 현재 안건 체크
-		const matchesCurrent = isSegmentInAgenda(segment, agenda);
-		if (matchesCurrent) {
+		if (isSegmentInAgenda(segment, agenda)) {
 			return true;
 		}
 		// 자식안건들 재귀 체크
 		if (agenda.children && agenda.children.length > 0) {
 			for (const child of agenda.children) {
-				if (isSegmentInAgendaRecursive(segment, child, depth + 1)) {
+				if (isSegmentInAgendaRecursive(segment, child)) {
 					return true;
 				}
 			}
-		}
-		// DEBUG: Log first segment only for first agenda
-		if (depth === 0 && segment.start < 5) {
-			console.log('DEBUG filter:', {
-				segmentStart: segment.start,
-				agendaTitle: agenda.title,
-				time_segments: agenda.time_segments,
-				childrenCount: agenda.children?.length,
-				matchesCurrent
-			});
 		}
 		return false;
 	}
@@ -117,18 +106,6 @@
 		selectedAgendaId = agendaId;
 		selectedChildId = childId;
 		showChildDropdown = null;
-
-		// DEBUG: Check agenda structure
-		if (agendaId !== 'all') {
-			const agenda = rootAgendas.find(a => a.id === agendaId);
-			console.log('DEBUG selectAgenda:', {
-				agendaId,
-				agenda: agenda?.title,
-				time_segments: agenda?.time_segments,
-				childrenCount: agenda?.children?.length,
-				children: agenda?.children?.map(c => ({ id: c.id, title: c.title, time_segments: c.time_segments, grandchildren: c.children?.length }))
-			});
-		}
 	}
 
 	function toggleChildDropdown(agendaId: number, event: MouseEvent) {

@@ -83,12 +83,18 @@ class AgendaService:
         """List all agendas for a meeting as a tree (root level only with children loaded)."""
         await self.get_meeting_or_raise(meeting_id)
 
-        # Get all agendas first
+        # Get all agendas first (load up to 3 levels deep)
+        # time_segments is JSONB column, auto-loaded. Only relationships need selectinload.
         query = (
             select(Agenda)
             .options(
                 selectinload(Agenda.questions),
+                # Level 1 children + their questions
                 selectinload(Agenda.children).selectinload(Agenda.questions),
+                # Level 2 children (grandchildren) + their questions
+                selectinload(Agenda.children)
+                    .selectinload(Agenda.children)
+                    .selectinload(Agenda.questions),
             )
             .where(
                 Agenda.meeting_id == meeting_id,

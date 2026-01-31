@@ -6,7 +6,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import MeetingStatus
-from app.schemas.agenda import QuestionResponse
+from app.schemas.agenda import QuestionResponse, TimeSegment
 
 
 class MeetingTypeResponse(BaseModel):
@@ -72,6 +72,7 @@ class AgendaBrief(BaseModel):
     description: Optional[str] = None
     status: str
     started_at_seconds: Optional[int] = None
+    time_segments: Optional[list[TimeSegment]] = None
     parent_id: Optional[int] = None
     level: int = 0
     questions: list[QuestionResponse] = []
