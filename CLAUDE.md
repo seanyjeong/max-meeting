@@ -46,19 +46,21 @@ frontend/
 ## 운영 명령어
 
 ```bash
-# 백엔드 재시작
+# 통합 관리 (권장)
+maxmeeting status   # 모든 서비스 상태
+maxmeeting restart  # 모든 서비스 재시작
+maxmeeting logs     # 통합 로그 (실시간)
+maxmeeting deploy   # git pull + 재시작
+
+# 개별 로그
+maxmeeting logs api     # API 로그만
+maxmeeting logs worker  # Worker 로그만
+maxmeeting logs beat    # Beat 로그만
+
+# 개별 서비스 (필요 시)
 sudo systemctl restart maxmeeting-api
-
-# 워커 재시작
 sudo systemctl restart maxmeeting-worker
-
-# Beat 스케줄러 (녹음 파일 자동 정리)
 sudo systemctl restart maxmeeting-beat
-
-# 로그 확인
-sudo journalctl -u maxmeeting-api -f      # API 로그
-sudo journalctl -u maxmeeting-worker -f   # STT/LLM 워커 로그
-sudo journalctl -u maxmeeting-beat -f     # Beat 스케줄러 로그
 
 # Caddy 재시작
 sudo systemctl reload caddy

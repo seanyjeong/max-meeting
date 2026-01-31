@@ -1,0 +1,82 @@
+#!/bin/bash
+# MAX Meeting 통합 관리 스크립트
+# 사용: maxmeeting [start|stop|restart|status|logs]
+
+SERVICES="maxmeeting-api maxmeeting-worker maxmeeting-beat"
+
+case "$1" in
+    start)
+        echo "🚀 Starting MAX Meeting services..."
+        for svc in $SERVICES; do
+            sudo systemctl start $svc
+            echo "  ✓ $svc started"
+        done
+        ;;
+    stop)
+        echo "🛑 Stopping MAX Meeting services..."
+        for svc in $SERVICES; do
+            sudo systemctl stop $svc
+            echo "  ✓ $svc stopped"
+        done
+        ;;
+    restart)
+        echo "🔄 Restarting MAX Meeting services..."
+        for svc in $SERVICES; do
+            sudo systemctl restart $svc
+            echo "  ✓ $svc restarted"
+        done
+        ;;
+    status)
+        echo "📊 MAX Meeting Status"
+        echo "─────────────────────────────────────"
+        for svc in $SERVICES; do
+            status=$(systemctl is-active $svc)
+            if [ "$status" = "active" ]; then
+                echo "  ✅ $svc: $status"
+            else
+                echo "  ❌ $svc: $status"
+            fi
+        done
+        ;;
+    logs)
+        # 실시간 통합 로그
+        shift
+        if [ "$1" = "api" ]; then
+            sudo journalctl -u maxmeeting-api -f
+        elif [ "$1" = "worker" ]; then
+            sudo journalctl -u maxmeeting-worker -f
+        elif [ "$1" = "beat" ]; then
+            sudo journalctl -u maxmeeting-beat -f
+        else
+            # 모든 서비스 로그 통합
+            sudo journalctl -u maxmeeting-api -u maxmeeting-worker -u maxmeeting-beat -f
+        fi
+        ;;
+    deploy)
+        echo "🚀 Deploying MAX Meeting..."
+        cd /home/et/max-ops/max-meeting
+        git pull origin main
+        echo "  ✓ Git pull complete"
+        for svc in $SERVICES; do
+            sudo systemctl restart $svc
+        done
+        echo "  ✓ All services restarted"
+        echo "✅ Deploy complete!"
+        ;;
+    *)
+        echo "MAX Meeting 관리 스크립트"
+        echo ""
+        echo "Usage: maxmeeting <command>"
+        echo ""
+        echo "Commands:"
+        echo "  start    - 모든 서비스 시작"
+        echo "  stop     - 모든 서비스 중지"
+        echo "  restart  - 모든 서비스 재시작"
+        echo "  status   - 서비스 상태 확인"
+        echo "  logs     - 통합 로그 보기 (실시간)"
+        echo "  logs api     - API 로그만"
+        echo "  logs worker  - Worker 로그만"
+        echo "  logs beat    - Beat 로그만"
+        echo "  deploy   - Git pull + 재시작"
+        ;;
+esac
