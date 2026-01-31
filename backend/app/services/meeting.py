@@ -136,6 +136,8 @@ class MeetingService:
                 selectinload(Meeting.agendas).selectinload(Agenda.children).selectinload(Agenda.questions),
                 selectinload(Meeting.agendas).selectinload(Agenda.children).selectinload(Agenda.children).selectinload(Agenda.questions),
                 selectinload(Meeting.agendas).selectinload(Agenda.children).selectinload(Agenda.children).selectinload(Agenda.children),
+                # Load transcripts for segment analysis
+                selectinload(Meeting.transcripts),
             )
 
         result = await self.db.execute(query)
