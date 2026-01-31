@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * DraggablePostIt - Draggable PostIt note component
-	 * Supports mouse and touch drag, delete action
+	 * Supports mouse and touch drag, delete action, custom colors
 	 */
 	import { X } from 'lucide-svelte';
 
@@ -12,17 +12,18 @@
 		position_y: number | null;
 		rotation: number | null;
 		z_index: number;
+		bg_color?: string | null;
+		text_color?: string | null;
 	}
 
 	interface Props {
 		note: Note;
-		color?: 'yellow' | 'pink' | 'green' | 'blue';
 		editable?: boolean;
 		onmove?: (id: number, x: number, y: number) => void;
 		ondelete?: (id: number) => void;
 	}
 
-	let { note, color = 'yellow', editable = true, onmove, ondelete }: Props = $props();
+	let { note, editable = true, onmove, ondelete }: Props = $props();
 
 	let isDragging = $state(false);
 	let showActions = $state(false);
@@ -39,13 +40,37 @@
 	// Random rotation for natural look
 	let rotation = $derived(note.rotation ?? (Math.random() * 6 - 3));
 
-	// Color styles
-	const colorStyles = {
-		yellow: 'bg-yellow-200 border-yellow-300',
-		pink: 'bg-pink-200 border-pink-300',
-		green: 'bg-green-200 border-green-300',
-		blue: 'bg-blue-200 border-blue-300'
+	// Color mapping
+	const bgColorMap: Record<string, string> = {
+		yellow: '#fef08a',
+		pink: '#fbcfe8',
+		green: '#bbf7d0',
+		blue: '#bfdbfe',
+		purple: '#ddd6fe',
+		orange: '#fed7aa'
 	};
+
+	const borderColorMap: Record<string, string> = {
+		yellow: '#fde047',
+		pink: '#f9a8d4',
+		green: '#86efac',
+		blue: '#93c5fd',
+		purple: '#c4b5fd',
+		orange: '#fdba74'
+	};
+
+	// Get actual colors
+	let bgColor = $derived(
+		note.bg_color
+			? bgColorMap[note.bg_color] || note.bg_color
+			: '#fef08a'
+	);
+	let borderColor = $derived(
+		note.bg_color
+			? borderColorMap[note.bg_color] || note.bg_color
+			: '#fde047'
+	);
+	let textColor = $derived(note.text_color || '#374151');
 
 	function handleMouseDown(e: MouseEvent) {
 		if (!editable) return;
@@ -116,7 +141,7 @@
 
 <div
 	bind:this={element}
-	class="draggable-postit {colorStyles[color]}"
+	class="draggable-postit"
 	class:dragging={isDragging}
 	class:editable
 	style="
@@ -124,6 +149,9 @@
 		top: {currentY}%;
 		transform: rotate({rotation}deg);
 		z-index: {isDragging ? 9999 : note.z_index + 10};
+		background-color: {bgColor};
+		border-color: {borderColor};
+		color: {textColor};
 	"
 	onmousedown={handleMouseDown}
 	ontouchstart={handleTouchStart}
@@ -208,7 +236,6 @@
 	.postit-content {
 		font-size: 0.8125rem;
 		line-height: 1.4;
-		color: #374151;
 		word-break: break-word;
 		white-space: pre-wrap;
 	}

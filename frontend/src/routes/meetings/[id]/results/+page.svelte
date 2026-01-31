@@ -797,6 +797,7 @@
 							</h2>
 							<PostItCanvas
 								bind:notes={meetingNotes}
+								{meetingId}
 								editable={true}
 								onupdate={loadMeetingNotes}
 							/>

@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Breadcrumb, Button, LoadingSpinner } from '$lib/components';
-	import PostItNote from '$lib/components/results/PostItNote.svelte';
+	import PostItCanvas from '$lib/components/results/PostItCanvas.svelte';
 	import { currentMeeting, isLoading } from '$lib/stores/meeting';
 	import { resultsStore, hasResult } from '$lib/stores/results';
 	import { api } from '$lib/api';
@@ -15,8 +15,13 @@
 	// Type definitions
 	interface Note {
 		id: number;
-		agenda_id: number;
+		agenda_id: number | null;
 		content: string;
+		position_x: number | null;
+		position_y: number | null;
+		rotation: number | null;
+		is_visible: boolean;
+		z_index: number;
 		created_at: string;
 	}
 
@@ -306,32 +311,28 @@
 									{#if getNotesForAgenda(agenda.id).length > 0}
 										<div class="notes-section">
 											<div class="notes-label">메모</div>
-											<div class="postit-grid">
-												{#each getNotesForAgenda(agenda.id) as note}
-													<PostItNote
-														content={note.content}
-														color={getPostItColor(idx)}
-														small={true}
-													/>
-												{/each}
-											</div>
+											<PostItCanvas
+												bind:notes={notes}
+												{meetingId}
+												agendaId={agenda.id}
+												editable={true}
+												onupdate={loadNotes}
+											/>
 										</div>
 									{/if}
 									<!-- Child agenda notes -->
 									{#if agenda.children && agenda.children.length > 0}
-										{#each agenda.children as child, childIdx}
+										{#each agenda.children as child}
 											{#if getNotesForAgenda(child.id).length > 0}
 												<div class="notes-section">
 													<div class="notes-label">{child.title} 메모</div>
-													<div class="postit-grid">
-														{#each getNotesForAgenda(child.id) as note}
-															<PostItNote
-																content={note.content}
-																color={getPostItColor(childIdx + 1)}
-																small={true}
-															/>
-														{/each}
-													</div>
+													<PostItCanvas
+														bind:notes={notes}
+														{meetingId}
+														agendaId={child.id}
+														editable={true}
+														onupdate={loadNotes}
+													/>
 												</div>
 											{/if}
 										{/each}

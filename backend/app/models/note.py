@@ -37,6 +37,8 @@ class ManualNote(Base, TimestampMixin):
     rotation: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     z_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    bg_color: Mapped[str | None] = mapped_column(String(20), nullable=True)  # e.g., 'yellow', '#fef08a'
+    text_color: Mapped[str | None] = mapped_column(String(20), nullable=True)  # e.g., '#374151'
 
     # Relationships
     meeting: Mapped["Meeting"] = relationship(

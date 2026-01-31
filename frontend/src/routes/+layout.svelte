@@ -8,7 +8,6 @@
 	import SkipLink from '$lib/components/SkipLink.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import UpdateNotifier from '$lib/components/UpdateNotifier.svelte';
-	import DebugPanel from '$lib/components/ui/DebugPanel.svelte';
 	import { APP_VERSION } from '$lib/version';
 
 	// Public routes that don't require authentication
@@ -144,5 +143,4 @@
 
 <ToastContainer />
 <UpdateNotifier />
-<DebugPanel />
 

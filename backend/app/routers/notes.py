@@ -99,6 +99,8 @@ async def create_note(
         content=data.content,
         agenda_id=data.agenda_id,
         timestamp_seconds=data.timestamp_seconds,
+        bg_color=data.bg_color,
+        text_color=data.text_color,
     )
     db.add(note)
     await db.commit()

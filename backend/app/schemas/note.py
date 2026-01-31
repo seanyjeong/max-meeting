@@ -21,7 +21,8 @@ class NoteBase(BaseModel):
 class NoteCreate(NoteBase):
     """Schema for creating a note."""
 
-    pass
+    bg_color: str | None = Field(default=None, max_length=20)
+    text_color: str | None = Field(default=None, max_length=20)
 
 
 class NoteUpdate(BaseModel):
@@ -44,6 +45,8 @@ class NoteResponse(NoteBase):
     rotation: float | None = None
     is_visible: bool = True
     z_index: int = 0
+    bg_color: str | None = None
+    text_color: str | None = None
     created_at: datetime
     updated_at: datetime
 
