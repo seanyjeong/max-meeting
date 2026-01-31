@@ -49,6 +49,23 @@
 		return false;
 	}
 
+	// 재귀적으로 안건과 모든 자손 안건을 체크
+	function isSegmentInAgendaRecursive(segment: TranscriptSegment, agenda: Agenda): boolean {
+		// 현재 안건 체크
+		if (isSegmentInAgenda(segment, agenda)) {
+			return true;
+		}
+		// 자식안건들 재귀 체크
+		if (agenda.children && agenda.children.length > 0) {
+			for (const child of agenda.children) {
+				if (isSegmentInAgendaRecursive(segment, child)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	// Filter segments
 	let filteredSegments = $derived(
 		$resultsStore.transcriptSegments.filter(segment => {
@@ -72,16 +89,8 @@
 							matchesAgenda = false;
 						}
 					} else {
-						// 대안건 전체 (자식안건 포함)
-						matchesAgenda = isSegmentInAgenda(segment, agenda);
-						if (!matchesAgenda && agenda.children) {
-							for (const child of agenda.children) {
-								if (isSegmentInAgenda(segment, child)) {
-									matchesAgenda = true;
-									break;
-								}
-							}
-						}
+						// 대안건 전체 (자식안건 + 손자안건 모두 포함)
+						matchesAgenda = isSegmentInAgendaRecursive(segment, agenda);
 					}
 				}
 			}
