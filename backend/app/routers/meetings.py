@@ -22,7 +22,14 @@ from app.schemas.meeting import (
     AgendaBrief,
 )
 from app.schemas.agenda import QuestionResponse
+from app.schemas.segment_analysis import (
+    AnalyzeSegmentsRequest,
+    AnalyzeSegmentsResponse,
+    MoveSegmentRequest,
+    MoveSegmentResponse,
+)
 from app.services.meeting import MeetingService
+from app.services.segment_analyzer import SegmentAnalyzer
 
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
@@ -443,3 +450,79 @@ async def get_meeting_transcript(
             "total_segments": len(all_segments),
         }
     }
+
+
+# ============================================
+# Segment Analysis Endpoints
+# ============================================
+
+
+@router.post("/{meeting_id}/analyze-segments", response_model=AnalyzeSegmentsResponse)
+async def analyze_meeting_segments(
+    meeting_id: int,
+    request: AnalyzeSegmentsRequest,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Analyze transcript segments for agenda mismatches using LLM.
+
+    This endpoint analyzes each segment's content and compares it with
+    the agenda it's currently matched to. If a mismatch is detected,
+    it suggests a more appropriate agenda.
+    """
+    service = MeetingService(db)
+    meeting = await service.get_by_id(meeting_id, include_details=True)
+
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meeting with id {meeting_id} not found",
+        )
+
+    analyzer = SegmentAnalyzer(db)
+    result = await analyzer.analyze_segments(meeting, request.force_reanalyze)
+
+    return AnalyzeSegmentsResponse(**result)
+
+
+@router.patch("/{meeting_id}/segments/{segment_index}/move", response_model=MoveSegmentResponse)
+async def move_segment(
+    meeting_id: int,
+    segment_index: int,
+    request: MoveSegmentRequest,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Move a segment to a different agenda.
+
+    This updates the segment's matched_agenda_id and adds the segment's
+    time range to the target agenda's time_segments.
+    """
+    service = MeetingService(db)
+    meeting = await service.get_by_id(meeting_id, include_details=True)
+
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meeting with id {meeting_id} not found",
+        )
+
+    analyzer = SegmentAnalyzer(db)
+    result = await analyzer.move_segment(
+        meeting,
+        segment_index,
+        request.target_agenda_id,
+        request.accept_suggestion,
+    )
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to move segment"),
+        )
+
+    await db.commit()
+
+    return MoveSegmentResponse(**result)
