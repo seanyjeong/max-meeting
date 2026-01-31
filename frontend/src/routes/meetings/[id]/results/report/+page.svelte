@@ -733,7 +733,12 @@
 		font-size: 0.875rem;
 	}
 
-	/* Print Styles */
+	/* Print Styles - Landscape for better 2-column layout */
+	@page {
+		size: A4 landscape;
+		margin: 1.5cm;
+	}
+
 	@media print {
 		.no-print {
 			display: none !important;
@@ -746,7 +751,7 @@
 		.meeting-report {
 			max-width: none;
 			margin: 0;
-			padding: 1cm 1.5cm;
+			padding: 0.5cm;
 			box-shadow: none;
 			border-radius: 0;
 		}
@@ -756,8 +761,8 @@
 		}
 
 		.agenda-content-grid {
-			grid-template-columns: 1fr 240px;
-			gap: 1rem;
+			grid-template-columns: 1fr 300px;
+			gap: 1.5rem;
 		}
 
 		.agenda-block {
