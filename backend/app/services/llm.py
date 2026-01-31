@@ -327,7 +327,9 @@ Now generate questions for the given agenda:
         system_prompt = (
             "You are an expert at structuring meeting agendas. "
             "Extract agenda items from text and format them as a hierarchical tree structure. "
-            "Always respond in Korean unless the input text is in another language."
+            "Always respond in Korean unless the input text is in another language. "
+            "Context: The meeting participants are professionals working in the physical education university entrance exam academy industry (체대입시 학원 관련 종사자). "
+            "This includes academy owners, PE coaches, admissions consultants, and related staff."
         )
 
         context_text = f"\nMeeting Context: {meeting_title}" if meeting_title else ""
