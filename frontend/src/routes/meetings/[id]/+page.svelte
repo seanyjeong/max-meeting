@@ -28,6 +28,16 @@
 	let editingQuestionText = $state('');
 	let addingQuestionAgendaId = $state<number | null>(null);
 	let newQuestionText = $state('');
+	// 태블릿용: 선택된 질문 (클릭 시 수정/삭제 버튼 표시)
+	let selectedQuestionId = $state<number | null>(null);
+
+	function toggleQuestionSelection(questionId: number) {
+		if (selectedQuestionId === questionId) {
+			selectedQuestionId = null;
+		} else {
+			selectedQuestionId = questionId;
+		}
+	}
 
 	async function addQuestion(agendaId: number) {
 		if (!newQuestionText.trim()) return;
@@ -498,12 +508,17 @@
 																<div class="space-y-2">
 																	<p class="text-xs font-semibold text-gray-500 uppercase">토의 질문</p>
 																	{#each child.questions as question (question.id)}
-																		<div class="flex items-start gap-2 text-sm group">
+																		<button
+																			type="button"
+																			onclick={() => toggleQuestionSelection(question.id)}
+																			class="w-full flex items-start gap-2 text-sm group text-left p-1 -m-1 rounded hover:bg-gray-50 {selectedQuestionId === question.id ? 'bg-blue-50 ring-1 ring-blue-200' : ''}"
+																		>
 																			<input
 																				type="checkbox"
 																				checked={question.answered}
 																				disabled
 																				class="mt-0.5 h-4 w-4 rounded border-gray-300"
+																				onclick={(e) => e.stopPropagation()}
 																			/>
 																			{#if editingQuestionId === question.id}
 																				<input
@@ -511,27 +526,28 @@
 																					bind:value={editingQuestionText}
 																					class="flex-1 px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
 																					onkeydown={(e) => e.key === 'Enter' && saveEditQuestion(question.id)}
+																					onclick={(e) => e.stopPropagation()}
 																				/>
-																				<button onclick={() => saveEditQuestion(question.id)} class="p-1 text-green-600 hover:bg-green-50 rounded">
+																				<button onclick={(e) => { e.stopPropagation(); saveEditQuestion(question.id); }} class="p-1 text-green-600 hover:bg-green-50 rounded">
 																					<Check class="w-4 h-4" />
 																				</button>
-																				<button onclick={cancelEditQuestion} class="p-1 text-gray-600 hover:bg-gray-100 rounded">
+																				<button onclick={(e) => { e.stopPropagation(); cancelEditQuestion(); }} class="p-1 text-gray-600 hover:bg-gray-100 rounded">
 																					<X class="w-4 h-4" />
 																				</button>
 																			{:else}
 																				<span class="flex-1 {question.answered ? 'text-gray-400 line-through' : 'text-gray-700'}">
 																					{question.question}
 																				</span>
-																				<div class="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
-																					<button onclick={() => startEditQuestion(question.id, question.question)} class="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded" title="수정">
+																				<div class="{selectedQuestionId === question.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} flex gap-1 transition-opacity">
+																					<button onclick={(e) => { e.stopPropagation(); startEditQuestion(question.id, question.question); }} class="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded" title="수정">
 																						<Pencil class="w-3.5 h-3.5" />
 																					</button>
-																					<button onclick={() => deleteQuestion(question.id)} class="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="삭제">
+																					<button onclick={(e) => { e.stopPropagation(); deleteQuestion(question.id); }} class="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="삭제">
 																						<Trash2 class="w-3.5 h-3.5" />
 																					</button>
 																				</div>
 																			{/if}
-																		</div>
+																		</button>
 																	{/each}
 																</div>
 															{/if}
@@ -604,12 +620,17 @@
 												<div class="space-y-2">
 													<p class="text-xs font-semibold text-gray-500 uppercase">토의 질문</p>
 													{#each agenda.questions as question (question.id)}
-														<div class="flex items-start gap-2 text-sm group">
+														<button
+															type="button"
+															onclick={() => toggleQuestionSelection(question.id)}
+															class="w-full flex items-start gap-2 text-sm group text-left p-1 -m-1 rounded hover:bg-gray-50 {selectedQuestionId === question.id ? 'bg-blue-50 ring-1 ring-blue-200' : ''}"
+														>
 															<input
 																type="checkbox"
 																checked={question.answered}
 																disabled
 																class="mt-0.5 h-4 w-4 rounded border-gray-300"
+																onclick={(e) => e.stopPropagation()}
 															/>
 															{#if editingQuestionId === question.id}
 																<input
@@ -617,27 +638,28 @@
 																	bind:value={editingQuestionText}
 																	class="flex-1 px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
 																	onkeydown={(e) => e.key === 'Enter' && saveEditQuestion(question.id)}
+																	onclick={(e) => e.stopPropagation()}
 																/>
-																<button onclick={() => saveEditQuestion(question.id)} class="p-1 text-green-600 hover:bg-green-50 rounded">
+																<button onclick={(e) => { e.stopPropagation(); saveEditQuestion(question.id); }} class="p-1 text-green-600 hover:bg-green-50 rounded">
 																	<Check class="w-4 h-4" />
 																</button>
-																<button onclick={cancelEditQuestion} class="p-1 text-gray-600 hover:bg-gray-100 rounded">
+																<button onclick={(e) => { e.stopPropagation(); cancelEditQuestion(); }} class="p-1 text-gray-600 hover:bg-gray-100 rounded">
 																	<X class="w-4 h-4" />
 																</button>
 															{:else}
 																<span class="flex-1 {question.answered ? 'text-gray-400 line-through' : 'text-gray-700'}">
 																	{question.question}
 																</span>
-																<div class="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
-																	<button onclick={() => startEditQuestion(question.id, question.question)} class="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded" title="수정">
+																<div class="{selectedQuestionId === question.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} flex gap-1 transition-opacity">
+																	<button onclick={(e) => { e.stopPropagation(); startEditQuestion(question.id, question.question); }} class="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded" title="수정">
 																		<Pencil class="w-3.5 h-3.5" />
 																	</button>
-																	<button onclick={() => deleteQuestion(question.id)} class="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="삭제">
+																	<button onclick={(e) => { e.stopPropagation(); deleteQuestion(question.id); }} class="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="삭제">
 																		<Trash2 class="w-3.5 h-3.5" />
 																	</button>
 																</div>
 															{/if}
-														</div>
+														</button>
 													{/each}
 												</div>
 											{/if}
