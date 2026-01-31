@@ -2,10 +2,11 @@
  * App version configuration
  * Update this when deploying new versions
  */
-export const APP_VERSION = '1.13.0';
+export const APP_VERSION = '1.14.0';
 export const BUILD_DATE = '2026-01-31';
 
 // Version history (for reference)
+// 1.14.0 - 새 로고 및 PWA 아이콘 업데이트 (Kimi AI 디자인)
 // 1.0.0 - Initial release
 // 1.1.0 - SQLAlchemy 성능 개선, 결과 페이지 UX 개선, PWA 지원
 // 1.2.0 - STT 파이프라인 안정화, 녹음 없이 회의록 생성 지원, UI 용어 개선
