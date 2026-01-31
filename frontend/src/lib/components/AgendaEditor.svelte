@@ -26,7 +26,6 @@
 	$effect(() => {
 		const newJson = JSON.stringify(items || []);
 		if (newJson !== lastItemsJson) {
-			console.log('[AgendaEditor] Syncing from prop, items:', items?.length ?? 0);
 			lastItemsJson = newJson;
 			internalItems = JSON.parse(newJson);
 		}
@@ -49,7 +48,6 @@
 	}
 
 	function notifyChange() {
-		console.log('[AgendaEditor] notifyChange called, internalItems:', internalItems.length);
 		onItemsChange(JSON.parse(JSON.stringify(internalItems)));
 	}
 
@@ -81,7 +79,6 @@
 	}
 
 	function addChildTo(parentId: string) {
-		console.log('[AgendaEditor] addChildTo called, parentId:', parentId);
 		saveHistory();
 		const newChild: AgendaItem = {
 			id: crypto.randomUUID(),
@@ -93,7 +90,6 @@
 		function addChild(itemList: AgendaItem[]): AgendaItem[] {
 			return itemList.map((item) => {
 				if (item.id === parentId) {
-					console.log('[AgendaEditor] Found parent, adding child');
 					// Expand parent when adding child
 					collapsedItems = new Set([...collapsedItems].filter((x) => x !== parentId));
 					return { ...item, children: [...getChildren(item), newChild] };
@@ -106,7 +102,6 @@
 		}
 
 		internalItems = addChild(internalItems);
-		console.log('[AgendaEditor] After addChild, internalItems:', JSON.stringify(internalItems));
 		notifyChange();
 	}
 

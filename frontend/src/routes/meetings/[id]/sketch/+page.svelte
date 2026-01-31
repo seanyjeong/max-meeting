@@ -37,8 +37,7 @@
 				if (activeAgenda) {
 					currentAgendaId = activeAgenda.id;
 				}
-			} catch (error) {
-				console.error('Failed to load meeting:', error);
+			} catch {
 				goto('/meetings');
 			} finally {
 				$isLoading = false;

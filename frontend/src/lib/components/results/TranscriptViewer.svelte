@@ -259,7 +259,6 @@
 			suggestions = response.suggestions || [];
 			analysisComplete = true;
 		} catch (error: any) {
-			console.error('Segment analysis failed:', error);
 			analysisError = error.message || '분석에 실패했습니다';
 		} finally {
 			isAnalyzing = false;
@@ -279,7 +278,6 @@
 			// Remove from suggestions list
 			suggestions = suggestions.filter(s => s.segment_index !== suggestion.segment_index);
 		} catch (error: any) {
-			console.error('Move segment failed:', error);
 			alert('세그먼트 이동에 실패했습니다: ' + (error.message || ''));
 		}
 	}
@@ -296,8 +294,8 @@
 			});
 			// Remove from suggestions list
 			suggestions = suggestions.filter(s => s.segment_index !== suggestion.segment_index);
-		} catch (error: any) {
-			console.error('Reject suggestion failed:', error);
+		} catch {
+			// Silently fail
 		}
 	}
 </script>

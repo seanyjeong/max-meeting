@@ -51,8 +51,8 @@
 			);
 			meetings.set(response.data);
 			totalCount = response.meta?.total || 0;
-		} catch (error) {
-			console.error('Failed to load meetings:', error);
+		} catch {
+			// Failed to load meetings
 		} finally {
 			isLoading.set(false);
 		}
@@ -86,8 +86,8 @@
 			deleteDialogOpen = false;
 			meetingToDelete = null;
 			loadMeetings();
-		} catch (error) {
-			console.error('Failed to delete meeting:', error);
+		} catch {
+			// Failed to delete meeting
 		}
 	}
 

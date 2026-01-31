@@ -75,8 +75,7 @@
 
 			const blob = await exportToPng(svgElement);
 			downloadBlob(blob, `sketch-${Date.now()}.png`);
-		} catch (error) {
-			console.error('PNG 내보내기 실패:', error);
+		} catch {
 			alert('PNG 내보내기 중 오류가 발생했습니다');
 		}
 	}
@@ -92,8 +91,7 @@
 			}
 
 			await exportToPdf(svgElement, `sketch-${Date.now()}.pdf`);
-		} catch (error) {
-			console.error('PDF 내보내기 실패:', error);
+		} catch {
 			alert('PDF 내보내기 중 오류가 발생했습니다');
 		}
 	}

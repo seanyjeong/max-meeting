@@ -59,6 +59,7 @@ celery_app.conf.update(
         "workers.tasks.stt.*": {"queue": "stt"},
         "workers.tasks.llm.*": {"queue": "llm"},
         "workers.tasks.upload.*": {"queue": "upload"},
+        "workers.tasks.cleanup.*": {"queue": "celery"},
     },
 
     # Define queues

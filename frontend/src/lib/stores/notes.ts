@@ -68,29 +68,17 @@ function createNotesStore() {
 			if (!note) return;
 
 			try {
-				console.log('[notes] 노트 저장 시작:', {
-					agendaId,
-					noteId: note.id,
-					contentLength: note.content?.length,
-					meetingId: state.meetingId
-				});
 				if (note.id) {
 					// Update existing note
 					await api.patch<{ data: Note }>(`/notes/${note.id}`, {
 						content: note.content
 					});
-					console.log('[notes] 노트 업데이트 완료:', note.id);
 				} else {
 					// Create new note - use correct endpoint
-					console.log('[notes] 새 노트 생성 요청:', {
-						agenda_id: note.agendaId,
-						content_length: note.content?.length
-					});
 					const response = await api.post<{ id: number; agenda_id: number; content: string; created_at: string; updated_at: string }>(`/meetings/${state.meetingId}/notes`, {
 						agenda_id: note.agendaId,
 						content: note.content
 					});
-					console.log('[notes] 새 노트 생성 완료:', response?.id);
 					// Update with server-generated ID (handle snake_case conversion)
 					update((s) => {
 						const updatedNotes = new Map(s.notes);
@@ -107,7 +95,6 @@ function createNotesStore() {
 					});
 				}
 			} catch (error) {
-				console.error(`Failed to save note for agenda ${agendaId}:`, error);
 				throw error;
 			}
 		});

@@ -164,8 +164,8 @@
 					localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches));
 				}
 			}
-		} catch (err) {
-			console.error('Search failed:', err);
+		} catch {
+			// Search failed
 		} finally {
 			loading = false;
 		}

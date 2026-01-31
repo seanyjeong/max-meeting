@@ -6,7 +6,7 @@
 
 | 구분 | 값 |
 |------|-----|
-| **Version** | v1.13.0 (2026-01-31) |
+| **Version** | v1.16.6 (2026-01-31) |
 | **Backend** | FastAPI @ `localhost:9000` |
 | **Frontend** | SvelteKit @ Vercel (`max-meeting.vercel.app`) |
 | **DB** | PostgreSQL @ `localhost:5432/maxmeeting` |
@@ -30,7 +30,7 @@ backend/
 ├── app/api/v1/     # API 라우터 (10개 파일)
 ├── app/models/     # SQLAlchemy 모델 (11개)
 ├── app/services/   # 비즈니스 로직 (12개: llm, stt, recording 등)
-├── workers/tasks/  # Celery 태스크 (stt, llm, upload)
+├── workers/tasks/  # Celery 태스크 (stt, llm, upload, cleanup)
 ├── .env            # 환경변수
 └── .venv/          # Python 가상환경
 
@@ -52,9 +52,13 @@ sudo systemctl restart maxmeeting-api
 # 워커 재시작
 sudo systemctl restart maxmeeting-worker
 
+# Beat 스케줄러 (녹음 파일 자동 정리)
+sudo systemctl restart maxmeeting-beat
+
 # 로그 확인
 sudo journalctl -u maxmeeting-api -f      # API 로그
 sudo journalctl -u maxmeeting-worker -f   # STT/LLM 워커 로그
+sudo journalctl -u maxmeeting-beat -f     # Beat 스케줄러 로그
 
 # Caddy 재시작
 sudo systemctl reload caddy
@@ -76,26 +80,33 @@ PGPASSWORD=password psql -h localhost -U maxmeeting -d maxmeeting
 
 ---
 
-## 최근 변경사항 (v1.3.0)
+## 최근 변경사항 (v1.16.6)
 
 | 변경 | 설명 |
 |------|------|
-| 계층형 안건 | 자식안건 토글 표시, 질문은 자식안건에 생성 |
-| 녹음 타임스탬프 | 자식안건 클릭 시 개별 타임스탬프 저장 |
-| 계층형 필터 | 결과 페이지에서 대안건 > 자식안건 드롭다운 필터 |
-| PDF 회의록 | 인쇄용 회의록 페이지 (`/results/report`) |
-| PWA 알림 제거 | 업데이트 알림 비활성화 |
+| STT 타임스탬프 수정 | LLM refine 비활성화로 긴 녹음 누락 문제 해결 |
+| 녹음 파일 자동 정리 | 회의록 생성 3일 후 자동 삭제 (Celery Beat) |
+| 디버그 코드 정리 | 프론트엔드 console.log 50+ 개 제거 |
+| STT 에러 처리 | 에러 시 recording.status = FAILED 설정 |
 
-## 이전 변경사항 (v1.2.0)
+## 이전 변경사항 (v1.16.0 ~ v1.16.5)
 
 | 변경 | 설명 |
 |------|------|
-| STT 파이프라인 | Celery chord → 순차 처리 (temp 파일 문제 해결) |
-| WebM 지원 | ffmpeg fallback으로 duration 감지 |
+| 새 로고 | 헤더에 Gemini 나노바나나 로고 적용 |
+| 인쇄용 회의록 | 2단 레이아웃, 포스트잇 메모 표시 |
+| 녹음 리사이즈 | 패널 드래그 리사이즈 지원 |
+| 필기 갤러리 | 스케치 백엔드 저장 및 갤러리 탭 |
+| 업무배치 탭 | 메모/필기/업무배치 3탭 구조 |
+
+## 초기 버전 (v1.0 ~ v1.3)
+
+| 변경 | 설명 |
+|------|------|
+| 계층형 안건 | 3레벨 안건, 자식안건 토글 표시 |
+| STT 파이프라인 | Celery 순차 처리, WebM 지원 |
 | 녹음 없이 생성 | 안건/메모만으로 회의록 생성 가능 |
-| UI 용어 | "전사록" → "대화 내용" |
-| 상태 폴링 | 자동 업데이트 + 토스트 알림 |
-| 성능 개선 | SQLAlchemy lazy="noload" (15초 → 100ms) |
+| PWA | 오프라인 지원, 설치 가능 |
 
 ---
 

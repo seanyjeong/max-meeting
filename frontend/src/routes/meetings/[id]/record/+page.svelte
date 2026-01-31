@@ -158,10 +158,8 @@
 	function handleNoteChange(agendaId: number, content: string) {
 		// agendaId가 유효한지 확인
 		if (!agendaId || typeof agendaId !== 'number' || isNaN(agendaId)) {
-			console.warn('[record] handleNoteChange: 유효하지 않은 agendaId:', agendaId);
 			return;
 		}
-		console.log('[record] handleNoteChange: agendaId:', agendaId, '내용 길이:', content.length);
 		notesStore.saveNote(agendaId, content);
 		agendaNotes = new Map(agendaNotes.set(agendaId, content));
 	}
@@ -196,10 +194,8 @@
 			});
 			savedSketchAgendas.add(agendaId);
 			savedSketchAgendas = new Set(savedSketchAgendas);
-			console.log('[record] Sketch saved for agenda:', agendaId);
 			return true;
-		} catch (error) {
-			console.error('[record] Failed to save sketch:', error);
+		} catch {
 			return false;
 		}
 	}
@@ -337,7 +333,6 @@
 
 				goto(`/meetings/${meetingId}/results`);
 			} else {
-				console.error('Upload failed');
 				toast.error('업로드에 실패했습니다. 다시 시도해주세요.');
 			}
 		} finally {
@@ -390,19 +385,14 @@
 
 	// 자식안건 타임스탬프 핸들러
 	async function handleChildAgendaChange(prevId: number | null, childId: number, currentTime: number) {
-		console.log('[record] handleChildAgendaChange:', { prevId, childId, currentTime });
-
 		// Close previous segment (대안건 또는 자식안건)
 		if (prevId !== null && prevId !== childId) {
-			console.log('[record] Closing previous segment:', prevId);
 			await closeSegment(prevId, currentTime);
 		}
 
 		// Open new segment for child
-		console.log('[record] Opening new segment for child:', childId);
 		await openSegment(childId, currentTime);
 		activeAgendaId = childId;
-		console.log('[record] activeAgendaId set to:', activeAgendaId);
 	}
 
 	// 안건 찾기 (대안건, 자식안건, 하하위안건)
@@ -447,32 +437,22 @@
 			try {
 				await api.patch(`/agendas/${agendaId}`, { time_segments: segments });
 				updateLocalAgenda(agendaId, { time_segments: segments });
-			} catch (error) {
-				console.error('Failed to close segment:', error);
+			} catch {
+				// Silently fail - segment will be closed on next opportunity
 			}
 		}
 	}
 
 	async function openSegment(agendaId: number, startTime: number) {
-		console.log('[record] openSegment called:', { agendaId, startTime });
-		if (!meeting) {
-			console.log('[record] openSegment: no meeting');
-			return;
-		}
+		if (!meeting) return;
 
 		const agenda = findAgendaById(agendaId);
-		console.log('[record] openSegment: found agenda:', agenda?.title, 'id:', agenda?.id);
-		if (!agenda) {
-			console.log('[record] openSegment: agenda not found for id:', agendaId);
-			return;
-		}
+		if (!agenda) return;
 
 		const segments = [...(agenda.time_segments || [])];
 		segments.push({ start: startTime, end: null });
-		console.log('[record] openSegment: new segments:', segments);
 
 		try {
-			console.log('[record] openSegment: calling API PATCH for agenda:', agendaId);
 			await api.patch(`/agendas/${agendaId}`, {
 				time_segments: segments,
 				started_at_seconds: segments[0].start,
@@ -483,9 +463,8 @@
 				started_at_seconds: segments[0].start,
 				status: 'in_progress' as const
 			});
-			console.log('[record] openSegment: success');
-		} catch (error) {
-			console.error('Failed to open segment:', error);
+		} catch {
+			// Silently fail - segment will be opened on next opportunity
 		}
 	}
 
@@ -539,8 +518,8 @@
 					}))
 				};
 			}
-		} catch (error) {
-			console.error('Failed to toggle question:', error);
+		} catch {
+			// Silently fail
 		}
 	}
 
@@ -551,24 +530,18 @@
 	}
 
 	async function handleFinishMeeting() {
-		console.log('[record] Finishing meeting:', meetingId);
-
 		// Save notes first
 		await notesStore.forceSave();
-		console.log('[record] Notes saved');
 
 		// Save all sketches
 		await saveAllSketches();
-		console.log('[record] Sketches saved');
 
 		// Update meeting status to completed
 		try {
-			const response = await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
-			console.log('[record] Meeting finished, response:', response);
+			await api.patch(`/meetings/${meetingId}`, { status: 'completed' });
 			toast.success('회의가 마무리되었습니다. 회의록을 생성합니다...');
 			goto(`/meetings/${meetingId}/results`);
-		} catch (error) {
-			console.error('[record] Failed to finish meeting:', error);
+		} catch {
 			toast.error('회의 마무리에 실패했습니다.');
 		}
 	}

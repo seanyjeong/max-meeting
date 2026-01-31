@@ -51,9 +51,8 @@
 
 			// 저장 완료 후 redirect
 			goto('/');
-		} catch (err) {
+		} catch {
 			error = '네트워크 오류. 다시 시도하세요.';
-			console.error('Login error:', err);
 		} finally {
 			isLoading = false;
 		}

@@ -101,8 +101,8 @@ function createRecordingStore() {
 			const combinedBlob = new Blob(chunks, { type: 'audio/webm' });
 			await saveRecordingChunk(meetingId, combinedBlob);
 			update((state) => ({ ...state, lastChunkSavedAt: new Date() }));
-		} catch (error) {
-			console.error('Failed to save recording chunk to IndexedDB:', error);
+		} catch {
+			// Silently fail - next interval will retry
 		}
 	};
 
@@ -154,8 +154,7 @@ function createRecordingStore() {
 					}
 				};
 
-				mediaRecorder.onerror = (event) => {
-					console.error('MediaRecorder error:', event);
+				mediaRecorder.onerror = () => {
 					update((state) => ({
 						...state,
 						error: 'Recording error occurred'
@@ -299,7 +298,6 @@ function createRecordingStore() {
 					`/meetings/${meetingId}/recordings`,
 					{}
 				);
-				console.log('[recording] 녹음 생성 응답:', createResponse);
 				const recordingId = createResponse.recording_id;
 
 				// Step 2: Upload in chunks (1MB chunks)
@@ -326,8 +324,7 @@ function createRecordingStore() {
 				}
 
 				return { recordingId, success: true };
-			} catch (error) {
-				console.error('Upload failed:', error);
+			} catch {
 				return { recordingId: -1, success: false };
 			}
 		}
@@ -387,8 +384,8 @@ function createVisualizationStore() {
 
 			// Clean up AudioContext to prevent resource leak
 			if (audioContext) {
-				audioContext.close().catch((err) => {
-					console.error('Failed to close AudioContext:', err);
+				audioContext.close().catch(() => {
+					// Ignore cleanup errors
 				});
 				audioContext = null;
 			}

@@ -34,8 +34,7 @@
 			try {
 				const response = await api.get<MeetingDetail>(`/meetings/${meetingId}`);
 				$currentMeeting = response;
-			} catch (error) {
-				console.error('Failed to load meeting:', error);
+			} catch {
 				goto('/meetings');
 				return;
 			} finally {

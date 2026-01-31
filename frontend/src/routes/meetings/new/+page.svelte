@@ -104,27 +104,15 @@
 	}
 
 	function handleEditorItemsChange(items: AgendaItem[]) {
-		console.log('[+page] handleEditorItemsChange called with', items.length, 'items');
 		const existingMap = flattenAgendas(agendas);
 		agendas = items.map((item) => editorItemToAgenda(item, existingMap));
-		console.log('[+page] agendas updated:', agendas);
-	}
-
-	// Debug log state for UI display
-	let debugLogs: string[] = $state([]);
-	function log(msg: string, data?: any) {
-		const logMsg = data ? `${msg}: ${JSON.stringify(data)}` : msg;
-		console.log('[NEW_MEETING]', logMsg);
-		debugLogs = [...debugLogs.slice(-19), `[${new Date().toLocaleTimeString()}] ${logMsg}`];
 	}
 
 	onMount(async () => {
 		// 로그인 상태 확인 (브라우저에서만)
 		if (typeof window !== 'undefined') {
 			const token = localStorage.getItem('accessToken');
-			log('Token check', token ? 'EXISTS' : 'MISSING');
 			if (!token) {
-				log('No access token - redirecting to login');
 				goto('/login');
 				return;
 			}
@@ -134,13 +122,9 @@
 
 		// 회의 유형 로드 (개별 try-catch)
 		try {
-			log('Loading meeting types...');
 			const typesResponse = await api.get<{ data: MeetingType[] }>('/meeting-types');
-			log('Meeting types API response', typesResponse);
 			meetingTypes = typesResponse.data || [];
-			log('meetingTypes set', { count: meetingTypes.length, types: meetingTypes });
 		} catch (err: any) {
-			log('Failed to load meeting types', { error: err.message, status: err.status });
 			error = `회의 유형 로드 실패: ${err.message || '알 수 없는 오류'}`;
 			if (err.status === 401 || err.status === 403) {
 				localStorage.removeItem('accessToken');
@@ -152,12 +136,9 @@
 
 		// 연락처 로드 (개별 try-catch)
 		try {
-			log('Loading contacts...');
 			const contactsResponse = await api.get<{ data: Contact[] }>('/contacts', { limit: 100 });
-			log('Contacts loaded', { count: contactsResponse.data?.length || 0 });
 			contacts = contactsResponse.data || [];
-		} catch (err: any) {
-			log('Failed to load contacts', { error: err.message });
+		} catch {
 			// 연락처 로드 실패는 무시 (필수 아님)
 		}
 

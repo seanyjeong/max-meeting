@@ -51,7 +51,7 @@
 			try {
 				editor.store.loadSnapshot(localSnapshot);
 			} catch {
-				console.warn('Failed to load local snapshot');
+				// Failed to load local snapshot
 			}
 		}
 	}

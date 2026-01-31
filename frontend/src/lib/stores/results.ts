@@ -131,11 +131,7 @@ function createResultsStore() {
 				...state,
 				transcriptSegments: response.data?.segments || []
 			}));
-		} catch (error: any) {
-			// 404 is expected when no transcript exists - don't log as error
-			if (error?.status !== 404 && error?.message !== 'Not Found') {
-				console.error('Failed to load transcript:', error);
-			}
+		} catch {
 			// Set empty segments - this is normal when no recording was made
 			update((state) => ({
 				...state,
@@ -235,7 +231,6 @@ function createResultsStore() {
 			}));
 
 			// 2. Then trigger LLM generation via regenerate endpoint
-			console.log('[results] Created result, triggering LLM generation...');
 			await api.post(`/results/${createResponse.id}/regenerate`, {});
 
 			// 3. Poll for completion (LLM runs in background via Celery)
@@ -257,12 +252,10 @@ function createResultsStore() {
 
 						// Check if summary is populated (LLM completed)
 						if (latest && latest.summary && latest.summary.length > 0) {
-							console.log('[results] LLM generation completed');
 							return latest;
 						}
-						console.log(`[results] Waiting for LLM... (${attempts}/${maxAttempts})`);
-					} catch (e) {
-						console.error('[results] Poll error:', e);
+					} catch {
+						// Continue polling on error
 					}
 				}
 				return null;
@@ -284,8 +277,7 @@ function createResultsStore() {
 					error: '회의록 생성 시간이 초과되었습니다. 잠시 후 새로고침해주세요.'
 				}));
 			}
-		} catch (error) {
-			console.error('[results] Generate error:', error);
+		} catch {
 			update((state) => ({
 				...state,
 				isGenerating: false,
@@ -309,7 +301,6 @@ function createResultsStore() {
 			}
 
 			// LLM 재생성 트리거 (Celery 백그라운드 작업)
-			console.log('[results] Triggering LLM regeneration...');
 			await api.post(`/results/${resultId}/regenerate`, {});
 
 			// LLM 완료될 때까지 폴링
@@ -332,12 +323,10 @@ function createResultsStore() {
 
 						// 요약이 있으면 완료
 						if (latest && latest.summary && latest.summary.length > 0) {
-							console.log('[results] LLM 재생성 완료');
 							return latest;
 						}
-						console.log(`[results] LLM 대기 중... (${attempts}/${maxAttempts})`);
-					} catch (e) {
-						console.error('[results] 폴링 에러:', e);
+					} catch {
+						// Continue polling on error
 					}
 				}
 				return null;
@@ -359,8 +348,7 @@ function createResultsStore() {
 					error: '회의록 재생성 시간이 초과되었습니다. 잠시 후 새로고침해주세요.'
 				}));
 			}
-		} catch (error) {
-			console.error('[results] 재생성 에러:', error);
+		} catch {
 			update((state) => ({
 				...state,
 				isGenerating: false,

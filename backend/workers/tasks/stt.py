@@ -64,17 +64,29 @@ def log_stt_complete_sync(recording_id: int, task_id: str, duration_seconds: flo
 
 
 def log_stt_error_sync(recording_id: int, task_id: str, error_type: str, error_message: str, context: dict | None = None):
-    """Synchronous wrapper for STT error logging."""
+    """Synchronous wrapper for STT error logging. Also sets recording status to FAILED."""
     async def _log():
+        from sqlalchemy import select
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
         from app.services.processing_log import ProcessingLogService
+        from app.models import Recording, RecordingStatus
 
         engine = create_async_engine(settings.ASYNC_DATABASE_URL)
         async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with async_session() as session:
+            # Log the error
             await ProcessingLogService.log_stt_error(
                 session, recording_id, error_type, error_message, task_id, context
             )
+            # Set recording status to FAILED
+            result = await session.execute(
+                select(Recording).where(Recording.id == recording_id)
+            )
+            recording = result.scalar_one_or_none()
+            if recording:
+                recording.status = RecordingStatus.FAILED
+                await session.commit()
+        await engine.dispose()
     try:
         asyncio.run(_log())
     except Exception as e:
@@ -651,27 +663,9 @@ def process_recording(
                     raise ValueError(f"Recording {recording_id} not found")
 
                 # Create transcript record
-                # Get meeting context for transcript refinement
-                from sqlalchemy import select
-                from app.models.meeting import Meeting
-                from app.models.agenda import Agenda
-                from app.services.llm import refine_transcript
-
-                meeting_result = await session.execute(
-                    select(Meeting).where(Meeting.id == recording.meeting_id)
-                )
-                meeting = meeting_result.scalar_one_or_none()
-
-                agendas_result = await session.execute(
-                    select(Agenda).where(Agenda.meeting_id == recording.meeting_id)
-                )
-                agendas = agendas_result.scalars().all()
-
-                # Use original segments without LLM refinement
-                # LLM refine was causing timestamp-text mismatch (263 segments -> 218 lines)
-                # Each segment has its own timestamp from Whisper - must preserve this mapping
+                # Use original Whisper segments (LLM refine disabled for timestamp accuracy)
                 final_segments = combined_result["segments"]
-                logger.info(f"Using original Whisper segments: {len(final_segments)} segments (LLM refine disabled for timestamp accuracy)")
+                logger.info(f"Saving {len(final_segments)} Whisper segments")
 
                 transcript = Transcript(
                     recording_id=recording_id,
