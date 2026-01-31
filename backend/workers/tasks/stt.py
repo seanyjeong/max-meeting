@@ -23,6 +23,64 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+# ==================== Processing Log Helpers ====================
+
+def log_stt_start_sync(recording_id: int, task_id: str, num_chunks: int, audio_duration: float, file_size: int):
+    """Synchronous wrapper for STT start logging."""
+    async def _log():
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from app.services.processing_log import ProcessingLogService
+
+        engine = create_async_engine(settings.ASYNC_DATABASE_URL)
+        async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            await ProcessingLogService.log_stt_start(
+                session, recording_id, task_id, num_chunks, audio_duration, file_size
+            )
+    try:
+        asyncio.run(_log())
+    except Exception as e:
+        logger.warning(f"Failed to log STT start: {e}")
+
+
+def log_stt_complete_sync(recording_id: int, task_id: str, duration_seconds: float,
+                          transcript_length: int, word_count: int, audio_duration: float):
+    """Synchronous wrapper for STT complete logging."""
+    async def _log():
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from app.services.processing_log import ProcessingLogService
+
+        engine = create_async_engine(settings.ASYNC_DATABASE_URL)
+        async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            await ProcessingLogService.log_stt_complete(
+                session, recording_id, task_id, duration_seconds,
+                transcript_length, word_count, audio_duration
+            )
+    try:
+        asyncio.run(_log())
+    except Exception as e:
+        logger.warning(f"Failed to log STT complete: {e}")
+
+
+def log_stt_error_sync(recording_id: int, task_id: str, error_type: str, error_message: str, context: dict | None = None):
+    """Synchronous wrapper for STT error logging."""
+    async def _log():
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from app.services.processing_log import ProcessingLogService
+
+        engine = create_async_engine(settings.ASYNC_DATABASE_URL)
+        async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            await ProcessingLogService.log_stt_error(
+                session, recording_id, error_type, error_message, task_id, context
+            )
+    try:
+        asyncio.run(_log())
+    except Exception as e:
+        logger.warning(f"Failed to log STT error: {e}")
+
+
 def get_redis_client() -> redis.Redis:
     """Get a Redis client for progress updates."""
     return redis.from_url(settings.REDIS_URL, decode_responses=True)
@@ -448,6 +506,7 @@ def process_recording(
 
     if not os.path.exists(file_path):
         logger.error(f"Recording file not found: {file_path}")
+        log_stt_error_sync(recording_id, self.request.id, "FileNotFound", f"Recording file not found: {file_path}")
         raise FileNotFoundError(f"Recording file not found: {file_path}")
 
     publish_progress(
@@ -475,10 +534,24 @@ def process_recording(
             )
         except Exception as e:
             logger.error(f"Failed to split audio: {e}")
+            log_stt_error_sync(recording_id, self.request.id, "AudioSplitError", str(e))
             raise
 
         num_chunks = len(chunk_paths)
         logger.info(f"Split into {num_chunks} chunks")
+
+        # Get audio duration and file size for logging
+        try:
+            audio_duration = get_audio_duration(file_path)
+            file_size = os.path.getsize(file_path)
+        except Exception:
+            audio_duration = 0.0
+            file_size = 0
+
+        # Log STT start
+        import time
+        stt_start_time = time.time()
+        log_stt_start_sync(recording_id, self.request.id, num_chunks, audio_duration, file_size)
 
         publish_progress(
             recording_id=recording_id,
@@ -527,6 +600,7 @@ def process_recording(
 
             except Exception as e:
                 logger.error(f"Chunk {i} failed: {e}")
+                log_stt_error_sync(recording_id, self.request.id, "ChunkProcessError", str(e), {"chunk_index": i})
                 raise
 
         # Combine results
@@ -629,6 +703,14 @@ def process_recording(
                 return transcript.id
 
         transcript_id = asyncio.run(_save())
+
+        # Log STT complete
+        stt_duration = time.time() - stt_start_time
+        full_text = combined_result.get("text", "")
+        log_stt_complete_sync(
+            recording_id, self.request.id, stt_duration,
+            len(full_text), len(full_text.split()), combined_result["duration"]
+        )
 
         publish_progress(
             recording_id=recording_id,

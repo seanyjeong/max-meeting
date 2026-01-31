@@ -22,6 +22,7 @@ from app.models.note import ManualNote, Sketch
 from app.models.result import ActionItem, AgendaDiscussion, MeetingDecision, MeetingResult
 from app.models.task import TaskTracking
 from app.models.audit import AuditLog
+from app.models.processing_log import LLMLog, STTLog
 
 __all__ = [
     # Base classes and mixins
@@ -63,4 +64,7 @@ __all__ = [
     "TaskTracking",
     # Audit
     "AuditLog",
+    # Processing logs
+    "STTLog",
+    "LLMLog",
 ]

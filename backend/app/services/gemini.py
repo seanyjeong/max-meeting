@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 class GeminiProvider(LLMProvider):
     """Gemini Flash LLM provider."""
 
+    # Token tracking for logging
+    last_prompt_tokens: int = 0
+    last_completion_tokens: int = 0
+
     def __init__(self, api_key: str):
         if not api_key:
             raise ValueError("Gemini API key is required")
@@ -110,6 +114,19 @@ class GeminiProvider(LLMProvider):
 
             # Generate response asynchronously to avoid blocking event loop
             response = await asyncio.to_thread(model.generate_content, full_prompt)
+
+            # Track token usage if available
+            try:
+                if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                    self.last_prompt_tokens = getattr(response.usage_metadata, 'prompt_token_count', 0)
+                    self.last_completion_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0)
+                else:
+                    # Estimate tokens (~4 chars per token)
+                    self.last_prompt_tokens = len(full_prompt) // 4
+                    self.last_completion_tokens = len(response.text) // 4 if response.text else 0
+            except Exception:
+                self.last_prompt_tokens = len(full_prompt) // 4
+                self.last_completion_tokens = 0
 
             if response.text:
                 return response.text.strip()

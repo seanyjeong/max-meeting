@@ -5,7 +5,9 @@ Provides a unified interface for LLM providers (Gemini, OpenAI).
 Based on spec Section 9 (LLM Prompt Strategy).
 """
 
+import asyncio
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -13,6 +15,48 @@ from typing import Any
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+# ==================== LLM Logging Helper ====================
+
+async def log_llm_operation(
+    operation: str,
+    meeting_id: int | None,
+    agenda_id: int | None,
+    provider: str,
+    model: str,
+    start_time: float,
+    prompt_length: int,
+    response_length: int,
+    prompt_tokens: int,
+    completion_tokens: int,
+    error: Exception | None = None,
+):
+    """Log LLM operation to database."""
+    try:
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from app.services.processing_log import ProcessingLogService
+
+        settings = get_settings()
+        engine = create_async_engine(settings.ASYNC_DATABASE_URL)
+        async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+        duration = time.time() - start_time
+
+        async with async_session() as session:
+            if error:
+                await ProcessingLogService.log_llm_error(
+                    session, operation, type(error).__name__, str(error),
+                    meeting_id, agenda_id, None, provider, {"model": model}
+                )
+            else:
+                await ProcessingLogService.log_llm_complete(
+                    session, operation, meeting_id, agenda_id, None,
+                    provider, model, duration, prompt_tokens, completion_tokens,
+                    prompt_length, response_length
+                )
+    except Exception as e:
+        logger.warning(f"Failed to log LLM operation: {e}")
 
 
 @dataclass
@@ -217,6 +261,11 @@ Output format:
 }}
 """
 
+        # Get meeting_id from meeting_info for logging
+        meeting_id = meeting_info.get('id') if meeting_info else None
+        start_time = time.time()
+        prompt_length = len(prompt)
+
         try:
             result = await self._provider.generate_json(
                 prompt=prompt,
@@ -225,11 +274,42 @@ Output format:
                 temperature=0.3,
             )
 
+            # Log successful operation
+            response_str = str(result)
+            prompt_tokens = getattr(self._provider, 'last_prompt_tokens', prompt_length // 4)
+            completion_tokens = getattr(self._provider, 'last_completion_tokens', len(response_str) // 4)
+
+            asyncio.create_task(log_llm_operation(
+                operation="summary",
+                meeting_id=meeting_id,
+                agenda_id=None,
+                provider=self.settings.LLM_PROVIDER,
+                model="gemini-2.0-flash",
+                start_time=start_time,
+                prompt_length=prompt_length,
+                response_length=len(response_str),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            ))
+
             # Validate and normalize the response
             return self._normalize_summary_result(result)
 
         except Exception as e:
             logger.error(f"Failed to generate meeting summary: {e}")
+            asyncio.create_task(log_llm_operation(
+                operation="summary",
+                meeting_id=meeting_id,
+                agenda_id=None,
+                provider=self.settings.LLM_PROVIDER,
+                model="gemini-2.0-flash",
+                start_time=start_time,
+                prompt_length=prompt_length,
+                response_length=0,
+                prompt_tokens=0,
+                completion_tokens=0,
+                error=e,
+            ))
             raise
 
     async def generate_questions(
@@ -286,6 +366,9 @@ Agenda: "프로젝트 진행 상황 점검"
 Now generate questions for the given agenda:
 """
 
+        start_time = time.time()
+        prompt_length = len(prompt)
+
         try:
             result = await self._provider.generate_json(
                 prompt=prompt,
@@ -303,10 +386,41 @@ Now generate questions for the given agenda:
                 logger.warning(f"Unexpected response format: {result}")
                 questions = []
 
+            # Log successful operation
+            response_str = str(result)
+            prompt_tokens = getattr(self._provider, 'last_prompt_tokens', prompt_length // 4)
+            completion_tokens = getattr(self._provider, 'last_completion_tokens', len(response_str) // 4)
+
+            asyncio.create_task(log_llm_operation(
+                operation="questions",
+                meeting_id=None,
+                agenda_id=None,
+                provider=self.settings.LLM_PROVIDER,
+                model="gemini-2.0-flash",
+                start_time=start_time,
+                prompt_length=prompt_length,
+                response_length=len(response_str),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            ))
+
             return [str(q) for q in questions[:num_questions]]
 
         except Exception as e:
             logger.error(f"Failed to generate questions: {e}")
+            asyncio.create_task(log_llm_operation(
+                operation="questions",
+                meeting_id=None,
+                agenda_id=None,
+                provider=self.settings.LLM_PROVIDER,
+                model="gemini-2.0-flash",
+                start_time=start_time,
+                prompt_length=prompt_length,
+                response_length=0,
+                prompt_tokens=0,
+                completion_tokens=0,
+                error=e,
+            ))
             raise
 
     async def parse_agenda_text(
@@ -471,6 +585,9 @@ Expected output:
 Return a valid JSON array with the hierarchical structure.
 """
 
+        start_time = time.time()
+        prompt_length = len(prompt)
+
         try:
             result = await self._provider.generate_json(
                 prompt=prompt,
@@ -516,10 +633,41 @@ Return a valid JSON array with the hierarchical structure.
                 if normalized_item:
                     normalized.append(normalized_item)
 
+            # Log successful operation
+            response_str = str(result)
+            prompt_tokens = getattr(self._provider, 'last_prompt_tokens', prompt_length // 4)
+            completion_tokens = getattr(self._provider, 'last_completion_tokens', len(response_str) // 4)
+
+            asyncio.create_task(log_llm_operation(
+                operation="agenda_parse",
+                meeting_id=None,
+                agenda_id=None,
+                provider=self.settings.LLM_PROVIDER,
+                model="gemini-2.0-flash",
+                start_time=start_time,
+                prompt_length=prompt_length,
+                response_length=len(response_str),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            ))
+
             return normalized
 
         except Exception as e:
             logger.error(f"Failed to parse agenda text: {e}")
+            asyncio.create_task(log_llm_operation(
+                operation="agenda_parse",
+                meeting_id=None,
+                agenda_id=None,
+                provider=self.settings.LLM_PROVIDER,
+                model="gemini-2.0-flash",
+                start_time=start_time,
+                prompt_length=prompt_length,
+                response_length=0,
+                prompt_tokens=0,
+                completion_tokens=0,
+                error=e,
+            ))
             raise
 
     def _normalize_summary_result(self, result: dict[str, Any]) -> dict[str, Any]:
