@@ -226,13 +226,13 @@ class STTService:
                 compression_ratio_threshold=2.4,
                 log_prob_threshold=-1.0,
                 no_speech_threshold=0.6,
-                condition_on_previous_text=True,
-                initial_prompt=None,
+                condition_on_previous_text=False,  # 드리프트 방지
+                initial_prompt="회의 녹음입니다.",  # 한국어 힌트
                 word_timestamps=False,
                 vad_filter=True,
                 vad_parameters={
-                    "min_silence_duration_ms": 500,
-                    "speech_pad_ms": 200,
+                    "min_silence_duration_ms": 1000,  # 1초 이상 무음만 스킵
+                    "speech_pad_ms": 400,  # 패딩 늘림
                 },
             )
 

@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     # ============================================
     WHISPER_MODEL: str = Field(default="medium")
     WHISPER_DEVICE: Literal["cpu", "cuda"] = Field(default="cpu")
-    STT_CHUNK_MINUTES: int = Field(default=10)
+    STT_CHUNK_MINUTES: int = Field(default=5)  # 5분 청크로 드리프트 감소
     STT_MAX_PARALLEL: int = Field(default=4)
     HUGGINGFACE_TOKEN: str = Field(default="")  # Required for pyannote speaker diarization
 
