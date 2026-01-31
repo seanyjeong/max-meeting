@@ -300,9 +300,24 @@
 									{/if}
 								</div>
 
-								<!-- Right Column: Notes & Sketches -->
+								<!-- Right Column: Notes -->
 								<div class="content-right">
-									<!-- Notes as PostIts -->
+									<!-- Parent agenda notes -->
+									{#if getNotesForAgenda(agenda.id).length > 0}
+										<div class="notes-section">
+											<div class="notes-label">메모</div>
+											<div class="postit-grid">
+												{#each getNotesForAgenda(agenda.id) as note}
+													<PostItNote
+														content={note.content}
+														color={getPostItColor(idx)}
+														small={true}
+													/>
+												{/each}
+											</div>
+										</div>
+									{/if}
+									<!-- Child agenda notes -->
 									{#if agenda.children && agenda.children.length > 0}
 										{#each agenda.children as child, childIdx}
 											{#if getNotesForAgenda(child.id).length > 0}
@@ -312,7 +327,7 @@
 														{#each getNotesForAgenda(child.id) as note}
 															<PostItNote
 																content={note.content}
-																color={getPostItColor(childIdx)}
+																color={getPostItColor(childIdx + 1)}
 																small={true}
 															/>
 														{/each}
@@ -320,22 +335,6 @@
 												</div>
 											{/if}
 										{/each}
-									{:else}
-										<!-- Notes for parent agenda -->
-										{#if getNotesForAgenda(agenda.id).length > 0}
-											<div class="notes-section">
-												<div class="notes-label">메모</div>
-												<div class="postit-grid">
-													{#each getNotesForAgenda(agenda.id) as note}
-														<PostItNote
-															content={note.content}
-															color={getPostItColor(idx)}
-															small={true}
-														/>
-													{/each}
-												</div>
-											</div>
-										{/if}
 									{/if}
 								</div>
 							</div>
