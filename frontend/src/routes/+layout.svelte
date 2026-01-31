@@ -43,7 +43,7 @@
 	<div class="min-h-screen bg-gray-50">
 		{#if $auth.isAuthenticated}
 			<nav class="bg-white shadow-sm border-b border-gray-200" aria-label="Main navigation">
-				<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+				<div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div class="flex justify-between h-16">
 						<div class="flex items-center">
 							<a href="/" class="flex items-baseline gap-2">
@@ -131,7 +131,7 @@
 			</nav>
 		{/if}
 
-		<main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" aria-label="Main content">
+		<main id="main-content" class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8" aria-label="Main content">
 			<slot />
 		</main>
 	</div>

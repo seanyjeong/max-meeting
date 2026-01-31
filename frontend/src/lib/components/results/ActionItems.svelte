@@ -150,7 +150,7 @@
 
 <div class="action-items">
 	<div class="header">
-		<h3 class="title">실행 항목</h3>
+		<h3 class="title">업무 배치</h3>
 		{#if !readonly}
 			<Button
 				variant="primary"

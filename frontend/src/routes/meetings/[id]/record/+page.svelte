@@ -48,7 +48,7 @@
 	let activeAgendaId = $state<number | null>(null);
 
 	// New state variables for notes/sketch
-	let activeTab = $state<'text' | 'sketch'>('text');
+	let activeTab = $state<'memo' | 'pen' | 'task'>('memo');
 	let agendaNotes = $state<Map<number, string>>(new Map());
 	let agendaSketches = $state<Map<number, any>>(new Map());
 
@@ -146,7 +146,7 @@
 		}
 	}
 
-	function handleTabChange(tab: 'text' | 'sketch') {
+	function handleTabChange(tab: 'memo' | 'pen' | 'task') {
 		activeTab = tab;
 	}
 
@@ -588,6 +588,7 @@
 						bind:activeTab
 						textContent={agendaNotes.get(meeting.agendas[currentAgendaIndex]?.id) || ''}
 						sketchSnapshot={agendaSketches.get(meeting.agendas[currentAgendaIndex]?.id)}
+						{meetingId}
 						onTabChange={handleTabChange}
 						onTextChange={(content) => {
 						const agenda = meeting?.agendas?.[currentAgendaIndex];
