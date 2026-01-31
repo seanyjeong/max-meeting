@@ -589,39 +589,36 @@
 		<LoadingSpinner size="lg" />
 	</div>
 {:else}
-	<!-- Main content area (below nav) -->
-	<div class="pt-16 h-screen flex flex-col">
-		<!-- Breadcrumb + Hint -->
-		<div class="px-4 py-3 border-b bg-white flex-shrink-0">
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-4">
-					<Breadcrumb items={breadcrumbItems} />
-					{#if !$isRecording && !$isPaused}
-						<span class="text-xs text-gray-400 hidden sm:inline">
-							녹음 없이 진행하려면 오른쪽 "회의 마무리" 버튼을 누르세요
-						</span>
-					{/if}
-				</div>
-
-				<!-- Battery warning -->
-				{#if $batteryWarning}
-					<div
-						class="flex items-center gap-2 px-3 py-1 rounded-full {$batteryWarning === 'critical'
-							? 'bg-red-100 text-red-700'
-							: 'bg-yellow-100 text-yellow-700'}"
-						role="alert"
-					>
-						<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-							<path
-								d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"
-							/>
-						</svg>
-						<span class="text-sm font-medium">
-							{$batteryWarning === 'critical' ? '배터리 부족!' : '배터리 낮음'}
-						</span>
-					</div>
+	<!-- Main content area (below nav) - 컴팩트하게 -->
+	<div class="pt-14 h-screen flex flex-col">
+		<!-- Breadcrumb (compact) -->
+		<div class="px-3 py-1.5 border-b bg-gray-50 flex-shrink-0 flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<Breadcrumb items={breadcrumbItems} />
+				{#if !$isRecording && !$isPaused}
+					<span class="text-xs text-gray-400 hidden lg:inline">
+						녹음 없이 → "회의 마무리"
+					</span>
 				{/if}
 			</div>
+			<!-- Battery warning -->
+			{#if $batteryWarning}
+				<div
+					class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs {$batteryWarning === 'critical'
+						? 'bg-red-100 text-red-700'
+						: 'bg-yellow-100 text-yellow-700'}"
+					role="alert"
+				>
+					<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+						<path
+							d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"
+						/>
+					</svg>
+					<span class="font-medium">
+						{$batteryWarning === 'critical' ? '배터리!' : '낮음'}
+					</span>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Recording Bar (inside meeting area, at top) -->
