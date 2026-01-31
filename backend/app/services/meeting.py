@@ -131,18 +131,11 @@ class MeetingService:
         if include_details:
             query = query.options(
                 selectinload(Meeting.attendees).selectinload(MeetingAttendee.contact),
-                # Load agendas with questions
-                selectinload(Meeting.agendas)
-                    .selectinload(Agenda.questions),
-                # Load 1st level children with questions
-                selectinload(Meeting.agendas)
-                    .selectinload(Agenda.children)
-                    .selectinload(Agenda.questions),
-                # Load 2nd level children (grandchildren) with questions
-                selectinload(Meeting.agendas)
-                    .selectinload(Agenda.children)
-                    .selectinload(Agenda.children)
-                    .selectinload(Agenda.questions),
+                # Load agendas with questions and children hierarchy (3 levels)
+                selectinload(Meeting.agendas).selectinload(Agenda.questions),
+                selectinload(Meeting.agendas).selectinload(Agenda.children).selectinload(Agenda.questions),
+                selectinload(Meeting.agendas).selectinload(Agenda.children).selectinload(Agenda.children).selectinload(Agenda.questions),
+                selectinload(Meeting.agendas).selectinload(Agenda.children).selectinload(Agenda.children).selectinload(Agenda.children),
             )
 
         result = await self.db.execute(query)
