@@ -6,6 +6,7 @@
 	import SummaryEditor from '$lib/components/results/SummaryEditor.svelte';
 	import ActionItems from '$lib/components/results/ActionItems.svelte';
 	import TranscriptViewer from '$lib/components/results/TranscriptViewer.svelte';
+	import PostItNote from '$lib/components/results/PostItNote.svelte';
 	import SpeakerMapper from '$lib/components/results/SpeakerMapper.svelte';
 	import RecordingsList from '$lib/components/results/RecordingsList.svelte';
 	import { Tabs, Skeleton, KeyboardShortcuts, EmptyState } from '$lib/components/ui';
@@ -35,6 +36,16 @@
 		created_at: string;
 	}
 
+	// Meeting notes interface
+	interface MeetingNote {
+		id: number;
+		meeting_id: number;
+		agenda_id: number | null;
+		content: string;
+		created_at: string;
+		updated_at: string;
+	}
+
 	let meetingId = $derived(parseInt($page.params.id ?? '0'));
 	let activeTab = $state<'summary' | 'discussions' | 'actions' | 'transcript'>('summary');
 	let speakerMapping = $state<Record<string, number>>({});
@@ -44,6 +55,9 @@
 	let recordings = $state<Recording[]>([]);
 	let recordingsLoading = $state(true);
 	let statusPollInterval: ReturnType<typeof setInterval> | null = null;
+
+	// Meeting notes state
+	let meetingNotes = $state<MeetingNote[]>([]);
 
 	// Progress tracking for U1
 	let sttStartTime = $state<number | null>(null);
@@ -112,6 +126,23 @@
 		} finally {
 			recordingsLoading = false;
 		}
+	}
+
+	async function loadMeetingNotes() {
+		try {
+			const response = await api.get<{ data: MeetingNote[] }>(
+				`/meetings/${meetingId}/notes`
+			);
+			meetingNotes = response.data || [];
+		} catch (error) {
+			logger.error('Failed to load meeting notes:', error);
+			meetingNotes = [];
+		}
+	}
+
+	// Get notes for a specific agenda
+	function getNotesForAgenda(agendaId: number): MeetingNote[] {
+		return meetingNotes.filter(n => n.agenda_id === agendaId);
 	}
 
 	async function triggerSTT() {
@@ -305,12 +336,13 @@
 			})()
 			: Promise.resolve();
 
-		// Load results, transcript, and recordings status in parallel
+		// Load results, transcript, recordings status, and notes in parallel
 		await Promise.all([
 			meetingPromise,
 			resultsStore.loadResult(meetingId),
 			resultsStore.loadTranscript(meetingId),
-			loadRecordingsStatus()
+			loadRecordingsStatus(),
+			loadMeetingNotes()
 		]);
 
 		// Start polling if processing or just uploaded (auto-STT may be running)
@@ -631,6 +663,7 @@
 								</Card>
 							{:else}
 								{#each $resultsStore.agendaDiscussions as discussion}
+									{@const agendaNotes = getNotesForAgenda(discussion.agenda_id)}
 									<Card>
 										{#snippet children()}
 											<div class="discussion-item">
@@ -638,14 +671,27 @@
 													<span class="discussion-order">{discussion.agenda_order}</span>
 													<h3 class="discussion-title">{discussion.agenda_title}</h3>
 												</div>
-												<div class="discussion-content">
-													<p>{discussion.summary}</p>
-													{#if discussion.key_points && discussion.key_points.length > 0}
-														<ul class="key-points">
-															{#each discussion.key_points as point}
-																<li>{point}</li>
+												<div class="discussion-body">
+													<div class="discussion-content">
+														<p>{discussion.summary}</p>
+														{#if discussion.key_points && discussion.key_points.length > 0}
+															<ul class="key-points">
+																{#each discussion.key_points as point}
+																	<li>{point}</li>
+																{/each}
+															</ul>
+														{/if}
+													</div>
+													{#if agendaNotes.length > 0}
+														<div class="discussion-notes">
+															{#each agendaNotes as note}
+																<PostItNote
+																	content={note.content}
+																	color="yellow"
+																	small
+																/>
 															{/each}
-														</ul>
+														</div>
 													{/if}
 												</div>
 											</div>
@@ -1068,14 +1114,29 @@
 		margin: 0;
 	}
 
-	.discussion-content {
+	.discussion-body {
+		display: flex;
+		gap: 1.5rem;
 		padding-left: 2.75rem;
+	}
+
+	.discussion-content {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.discussion-content p {
 		color: #374151;
 		line-height: 1.625;
 		margin: 0;
+	}
+
+	.discussion-notes {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		flex-shrink: 0;
+		padding-top: 0.5rem;
 	}
 
 	.key-points {
@@ -1087,5 +1148,18 @@
 	.key-points li {
 		color: #4b5563;
 		margin-bottom: 0.25rem;
+	}
+
+	/* Responsive: stack notes below content on small screens */
+	@media (max-width: 768px) {
+		.discussion-body {
+			flex-direction: column;
+		}
+
+		.discussion-notes {
+			flex-direction: row;
+			flex-wrap: wrap;
+			padding-top: 1rem;
+		}
 	}
 </style>
