@@ -15,8 +15,8 @@ from app.models.enums import AgendaStatus
 class TimeSegment(BaseModel):
     """Schema for a time segment within an agenda."""
 
-    start: int = Field(..., ge=0, description="Start time in seconds")
-    end: int | None = Field(None, ge=0, description="End time in seconds (null if ongoing)")
+    start: float = Field(..., ge=0, description="Start time in seconds")
+    end: float | None = Field(None, ge=0, description="End time in seconds (null if ongoing)")
 
 
 # ============================================
