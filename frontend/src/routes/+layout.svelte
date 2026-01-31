@@ -41,7 +41,7 @@
 
 	<div class="min-h-screen bg-gray-50">
 		{#if $auth.isAuthenticated}
-			<nav class="bg-white shadow-sm border-b border-gray-200" aria-label="Main navigation">
+			<nav class="bg-white shadow-sm border-b border-gray-200 no-print" aria-label="Main navigation">
 				<div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div class="flex justify-between h-16">
 						<div class="flex items-center">

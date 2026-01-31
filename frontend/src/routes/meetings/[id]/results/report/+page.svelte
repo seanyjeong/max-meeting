@@ -438,35 +438,35 @@
 		border-radius: 0.5rem;
 	}
 
-	/* Report Header */
+	/* Report Header - Compact for print */
 	.report-header {
-		border-bottom: 3px solid #1d4ed8;
-		padding-bottom: 1.5rem;
-		margin-bottom: 2rem;
+		border-bottom: 2px solid #1d4ed8;
+		padding-bottom: 0.75rem;
+		margin-bottom: 1rem;
 	}
 
 	.report-title {
-		font-size: 2rem;
+		font-size: 1.5rem;
 		font-weight: 700;
 		color: #111827;
-		margin: 0 0 1rem 0;
+		margin: 0 0 0.5rem 0;
 	}
 
 	.report-meta {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 0.75rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.5rem;
+		font-size: 0.875rem;
 	}
 
 	.meta-item {
 		display: flex;
-		gap: 0.75rem;
+		gap: 0.5rem;
 	}
 
 	.meta-label {
 		font-weight: 600;
 		color: #374151;
-		min-width: 60px;
 	}
 
 	.meta-value {
