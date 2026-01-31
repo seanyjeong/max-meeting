@@ -28,6 +28,7 @@
 	let suggestions = $state<SegmentSuggestion[]>([]);
 	let isAnalyzing = $state(false);
 	let analysisError = $state<string | null>(null);
+	let analysisComplete = $state(false);
 	let showSuggestions = $state(true);
 
 	// Filter to only root-level agendas (parent_id is null/undefined)
@@ -235,12 +236,14 @@
 
 		isAnalyzing = true;
 		analysisError = null;
+		analysisComplete = false;
 
 		try {
 			const response = await api.post(`/meetings/${meetingId}/analyze-segments`, {
 				force_reanalyze: false
 			}) as { suggestions: SegmentSuggestion[] };
 			suggestions = response.suggestions || [];
+			analysisComplete = true;
 		} catch (error: any) {
 			console.error('Segment analysis failed:', error);
 			analysisError = error.message || '분석에 실패했습니다';
@@ -379,6 +382,8 @@
 			>
 				{showSuggestions ? '제안 숨기기' : '제안 표시'}
 			</button>
+		{:else if analysisComplete}
+			<span class="analysis-success">✓ 모든 세그먼트가 올바르게 매칭됨</span>
 		{/if}
 
 		{#if analysisError}
@@ -942,6 +947,12 @@
 	.analysis-error {
 		font-size: 0.75rem;
 		color: #dc2626;
+	}
+
+	.analysis-success {
+		font-size: 0.8125rem;
+		color: #16a34a;
+		font-weight: 500;
 	}
 
 	/* Segment with suggestion */

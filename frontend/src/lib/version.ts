@@ -2,8 +2,8 @@
  * App version configuration
  * Update this when deploying new versions
  */
-export const APP_VERSION = '1.6.0';
-export const BUILD_DATE = '2026-01-30';
+export const APP_VERSION = '1.10.0';
+export const BUILD_DATE = '2026-01-31';
 
 // Version history (for reference)
 // 1.0.0 - Initial release
@@ -13,6 +13,10 @@ export const BUILD_DATE = '2026-01-30';
 // 1.4.0 - 계층형 안건 시스템, 3레벨 지원
 // 1.5.0 - 세그먼트-안건 매핑 개선, QA 버그 수정
 // 1.6.0 - 코드 품질 개선: 보안 수정, 유틸리티 통합, 로깅 개선
+// 1.7.0 - STT 에러 처리 개선, 드롭다운 오버플로우 수정, 진행 모달 개선
+// 1.8.0 - 질문 수정/삭제 버튼 태블릿 지원
+// 1.9.0 - 안건 재매칭 분석 UI 추가
+// 1.10.0 - 분석 완료 메시지 추가, 버전 표시 수정
 
 export function getVersionInfo() {
 	return {
