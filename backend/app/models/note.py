@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,6 +30,13 @@ class ManualNote(Base, TimestampMixin):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     timestamp_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Interactive PostIt fields
+    position_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    position_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rotation: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_visible: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    z_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Relationships
     meeting: Mapped["Meeting"] = relationship(

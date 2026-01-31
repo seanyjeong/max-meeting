@@ -7,6 +7,7 @@
 	import ActionItems from '$lib/components/results/ActionItems.svelte';
 	import TranscriptViewer from '$lib/components/results/TranscriptViewer.svelte';
 	import PostItNote from '$lib/components/results/PostItNote.svelte';
+	import PostItCanvas from '$lib/components/results/PostItCanvas.svelte';
 	import SpeakerMapper from '$lib/components/results/SpeakerMapper.svelte';
 	import RecordingsList from '$lib/components/results/RecordingsList.svelte';
 	import { Tabs, Skeleton, KeyboardShortcuts, EmptyState } from '$lib/components/ui';
@@ -58,7 +59,7 @@
 	}
 
 	let meetingId = $derived(parseInt($page.params.id ?? '0'));
-	let activeTab = $state<'summary' | 'discussions' | 'actions' | 'transcript' | 'sketches'>('summary');
+	let activeTab = $state<'summary' | 'discussions' | 'actions' | 'transcript' | 'memos' | 'sketches'>('summary');
 	let speakerMapping = $state<Record<string, number>>({});
 	let showShortcutsHelp = $state(false);
 
@@ -651,6 +652,19 @@
 				<button
 					type="button"
 					class="tab"
+					class:active={activeTab === 'memos'}
+					role="tab"
+					aria-selected={activeTab === 'memos'}
+					onclick={() => activeTab = 'memos'}
+				>
+					메모
+					{#if meetingNotes.length > 0}
+						<span class="tab-badge">{meetingNotes.length}</span>
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="tab"
 					class:active={activeTab === 'sketches'}
 					role="tab"
 					aria-selected={activeTab === 'sketches'}
@@ -768,7 +782,27 @@
 
 						<!-- Transcript Viewer -->
 						<TranscriptViewer agendas={$currentMeeting?.agendas || []} />
-					{:else if activeTab === 'sketches'}
+					{:else if activeTab === 'memos'}
+					<!-- Memos PostIt Canvas -->
+					<Card>
+						{#snippet children()}
+							<h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+								<svg class="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+									<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+								</svg>
+								메모
+								{#if meetingNotes.length > 0}
+									<span class="text-sm text-gray-500">({meetingNotes.length}개)</span>
+								{/if}
+							</h2>
+							<PostItCanvas
+								bind:notes={meetingNotes}
+								editable={true}
+								onupdate={loadMeetingNotes}
+							/>
+						{/snippet}
+					</Card>
+				{:else if activeTab === 'sketches'}
 					<!-- Sketches Gallery -->
 					{#if meetingSketches.length === 0}
 						<Card>

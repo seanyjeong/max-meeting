@@ -39,6 +39,11 @@ class NoteResponse(NoteBase):
 
     id: int
     meeting_id: int
+    position_x: float | None = None
+    position_y: float | None = None
+    rotation: float | None = None
+    is_visible: bool = True
+    z_index: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -48,3 +53,22 @@ class NoteListResponse(BaseModel):
 
     data: list[NoteResponse]
     meta: dict
+
+
+# ============================================
+# Interactive PostIt Schemas
+# ============================================
+
+
+class NotePositionUpdate(BaseModel):
+    """Schema for updating note position."""
+
+    position_x: float = Field(..., ge=0, le=100, description="X coordinate (%)")
+    position_y: float = Field(..., ge=0, le=100, description="Y coordinate (%)")
+    z_index: int | None = Field(default=None, description="Layer order")
+
+
+class NoteVisibilityUpdate(BaseModel):
+    """Schema for toggling note visibility."""
+
+    is_visible: bool

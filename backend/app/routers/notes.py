@@ -12,8 +12,10 @@ from app.models import ManualNote, Meeting
 from app.schemas.note import (
     NoteCreate,
     NoteListResponse,
+    NotePositionUpdate,
     NoteResponse,
     NoteUpdate,
+    NoteVisibilityUpdate,
 )
 
 
@@ -151,3 +153,45 @@ async def delete_note(
     note = await get_note_or_raise(db, note_id)
     await db.delete(note)
     await db.commit()
+
+
+# ============================================
+# Interactive PostIt Endpoints
+# ============================================
+
+
+@router.patch("/notes/{note_id}/position", response_model=NoteResponse)
+async def update_note_position(
+    note_id: int,
+    data: NotePositionUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Update note position (for draggable PostIt)."""
+    note = await get_note_or_raise(db, note_id)
+
+    note.position_x = data.position_x
+    note.position_y = data.position_y
+    if data.z_index is not None:
+        note.z_index = data.z_index
+
+    await db.commit()
+    await db.refresh(note)
+    return NoteResponse.model_validate(note)
+
+
+@router.patch("/notes/{note_id}/visibility", response_model=NoteResponse)
+async def update_note_visibility(
+    note_id: int,
+    data: NoteVisibilityUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Toggle note visibility (hide/show PostIt)."""
+    note = await get_note_or_raise(db, note_id)
+
+    note.is_visible = data.is_visible
+
+    await db.commit()
+    await db.refresh(note)
+    return NoteResponse.model_validate(note)
