@@ -847,13 +847,13 @@ async def refine_transcript(
 
         # Parse refined text back to segments
         refined_segments = []
-        lines = refined_text.strip().split("\n")
+        lines = [line.strip() for line in refined_text.strip().split("\n") if line.strip()]
+
+        # Count non-empty lines for proper ratio mapping
+        num_refined = len(lines)
+        num_original = len(segments)
 
         for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
-
             # Parse [speaker] text format
             if line.startswith("[") and "]" in line:
                 bracket_end = line.index("]")
@@ -863,12 +863,30 @@ async def refine_transcript(
                 speaker = None
                 text = line
 
-            # Match with original segment timing if available
-            if i < len(segments):
-                orig = segments[i]
+            # Map to original segment using ratio-based indexing
+            # This ensures timestamps span the full original duration even if line count differs
+            if num_original > 0 and num_refined > 0:
+                # Calculate the proportional index in original segments
+                ratio = i / max(num_refined - 1, 1) if num_refined > 1 else 0
+                orig_idx = min(int(ratio * (num_original - 1)), num_original - 1)
+                orig = segments[orig_idx]
+
+                # For start/end, interpolate based on position
+                if i == 0:
+                    start = segments[0].get("start", 0)
+                else:
+                    prev_ratio = (i - 1) / max(num_refined - 1, 1) if num_refined > 1 else 0
+                    prev_orig_idx = min(int(prev_ratio * (num_original - 1)), num_original - 1)
+                    start = segments[prev_orig_idx].get("end", 0)
+
+                if i == num_refined - 1:
+                    end = segments[-1].get("end", 0)
+                else:
+                    end = orig.get("end", 0)
+
                 refined_segments.append({
-                    "start": orig.get("start", 0),
-                    "end": orig.get("end", 0),
+                    "start": start,
+                    "end": end,
                     "text": text,
                     "speaker": speaker,
                     "confidence": orig.get("confidence"),

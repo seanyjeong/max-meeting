@@ -2,10 +2,11 @@
  * App version configuration
  * Update this when deploying new versions
  */
-export const APP_VERSION = '1.16.3';
+export const APP_VERSION = '1.16.4';
 export const BUILD_DATE = '2026-01-31';
 
 // Version history (for reference)
+// 1.16.4 - STT 타임스탬프 버그 수정 (LLM refine 비활성화로 정확도 보장)
 // 1.16.3 - 녹음 페이지 리사이즈 패널, 회의록 메모 통합, UI 컴팩트화
 // 1.16.0 - 헤더에 새 로고 적용 (Gemini 나노바나나)
 // 1.15.0 - 인쇄용 회의록 개선: 2단 레이아웃, 포스트잇 메모 표시
