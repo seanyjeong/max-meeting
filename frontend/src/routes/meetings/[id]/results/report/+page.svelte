@@ -78,7 +78,27 @@
 	}
 
 	function getNotesForAgenda(agendaId: number): Note[] {
-		return notes.filter(n => n.agenda_id === agendaId);
+		return notes.filter(n => n.agenda_id === agendaId && n.is_visible);
+	}
+
+	// 부모 안건 + 모든 자식/손자 안건의 메모를 합쳐서 반환
+	function getAllNotesForAgendaTree(agenda: Agenda): Note[] {
+		const allIds: number[] = [agenda.id];
+
+		// 자식 안건 ID 추가
+		if (agenda.children) {
+			for (const child of agenda.children) {
+				allIds.push(child.id);
+				// 손자 안건 ID 추가
+				if (child.children) {
+					for (const grandchild of child.children) {
+						allIds.push(grandchild.id);
+					}
+				}
+			}
+		}
+
+		return notes.filter(n => allIds.includes(n.agenda_id!) && n.is_visible);
 	}
 
 	function getDiscussion(agendaId: number): string | null {
@@ -103,9 +123,32 @@
 		window.print();
 	}
 
+	// 부모 안건 + 모든 자식/손자 안건의 ID 배열 반환
+	function getAgendaTreeIds(agenda: Agenda): number[] {
+		const allIds: number[] = [agenda.id];
+
+		if (agenda.children) {
+			for (const child of agenda.children) {
+				allIds.push(child.id);
+				if (child.children) {
+					for (const grandchild of child.children) {
+						allIds.push(grandchild.id);
+					}
+				}
+			}
+		}
+
+		return allIds;
+	}
+
 	// Check if agenda has any right-side content (notes only, no sketches)
 	function hasRightContent(agendaId: number): boolean {
 		return getNotesForAgenda(agendaId).length > 0;
+	}
+
+	// Check if agenda tree has any notes (parent + children + grandchildren)
+	function agendaTreeHasNotes(agenda: Agenda): boolean {
+		return getAllNotesForAgendaTree(agenda).length > 0;
 	}
 
 	// Check if agenda has any content at all (including children)
@@ -224,7 +267,7 @@
 							{/if}
 
 							<!-- 2-Column Layout for agenda content -->
-							<div class="agenda-content-grid" class:single-column={!hasRightContent(agenda.id) && !(agenda.children?.some(c => hasRightContent(c.id)))}>
+							<div class="agenda-content-grid" class:single-column={!agendaTreeHasNotes(agenda)}>
 								<!-- Left Column: Discussion -->
 								<div class="content-left">
 									{#if agenda.children && agenda.children.length > 0}
@@ -342,37 +385,19 @@
 									{/if}
 								</div>
 
-								<!-- Right Column: Notes -->
+								<!-- Right Column: Notes (부모+자식+손자 통합) -->
 								<div class="content-right">
-									<!-- Parent agenda notes -->
-									{#if getNotesForAgenda(agenda.id).length > 0}
+									{#if agendaTreeHasNotes(agenda)}
 										<div class="notes-section">
-											<div class="notes-label">메모</div>
+											<div class="notes-label">{agenda.title} 메모</div>
 											<PostItCanvas
 												bind:notes={notes}
 												{meetingId}
-												agendaId={agenda.id}
+												agendaIds={getAgendaTreeIds(agenda)}
 												editable={true}
 												onupdate={loadNotes}
 											/>
 										</div>
-									{/if}
-									<!-- Child agenda notes -->
-									{#if agenda.children && agenda.children.length > 0}
-										{#each agenda.children as child}
-											{#if getNotesForAgenda(child.id).length > 0}
-												<div class="notes-section">
-													<div class="notes-label">{child.title} 메모</div>
-													<PostItCanvas
-														bind:notes={notes}
-														{meetingId}
-														agendaId={child.id}
-														editable={true}
-														onupdate={loadNotes}
-													/>
-												</div>
-											{/if}
-										{/each}
 									{/if}
 								</div>
 							</div>

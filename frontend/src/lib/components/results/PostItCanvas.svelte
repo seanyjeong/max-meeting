@@ -25,15 +25,28 @@
 		notes: Note[];
 		meetingId?: number;
 		agendaId?: number;
+		agendaIds?: number[];  // 여러 안건 ID를 한번에 필터링 (자식/손자 포함)
 		editable?: boolean;
 		onupdate?: () => void;
 	}
 
-	let { notes = $bindable(), meetingId, agendaId, editable = true, onupdate }: Props = $props();
+	let { notes = $bindable(), meetingId, agendaId, agendaIds, editable = true, onupdate }: Props = $props();
 
-	// Filter: only visible notes for this agenda
+	// Filter: only visible notes for this agenda(s)
 	let visibleNotes = $derived(
-		notes.filter((n) => n.is_visible && (agendaId !== undefined ? n.agenda_id === agendaId : true))
+		notes.filter((n) => {
+			if (!n.is_visible) return false;
+			// agendaIds 배열이 있으면 그 안의 ID들로 필터링
+			if (agendaIds && agendaIds.length > 0) {
+				return agendaIds.includes(n.agenda_id!);
+			}
+			// 단일 agendaId가 있으면 그걸로 필터링
+			if (agendaId !== undefined) {
+				return n.agenda_id === agendaId;
+			}
+			// 둘 다 없으면 모든 메모 표시
+			return true;
+		})
 	);
 
 	// Add note modal state

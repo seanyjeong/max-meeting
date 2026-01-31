@@ -69,6 +69,31 @@
 	// Guard reference
 	let recordingGuard: RecordingGuard;
 
+	// Resizable panel state
+	let leftPanelWidth = $state(40); // percentage (default 40%)
+	let isResizing = $state(false);
+	let containerRef = $state<HTMLDivElement | null>(null);
+
+	function startResize(e: MouseEvent | TouchEvent) {
+		isResizing = true;
+		e.preventDefault();
+	}
+
+	function stopResize() {
+		isResizing = false;
+	}
+
+	function handleResize(e: MouseEvent | TouchEvent) {
+		if (!isResizing || !containerRef) return;
+
+		const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+		const rect = containerRef.getBoundingClientRect();
+		const newWidth = ((clientX - rect.left) / rect.width) * 100;
+
+		// Clamp between 25% and 70%
+		leftPanelWidth = Math.min(70, Math.max(25, newWidth));
+	}
+
 	// Battery monitoring
 	let unsubscribeBattery: (() => void) | null = null;
 
@@ -615,10 +640,19 @@
 			/>
 		</div>
 
-		<!-- Split layout (fills remaining space) -->
-		<div class="flex flex-1 min-h-0">
-			<!-- Left: Agenda Panel (25%) -->
-			<div class="w-1/4 min-w-64 max-w-80 border-r flex flex-col">
+		<!-- Split layout (fills remaining space) - Resizable -->
+		<div
+			class="flex flex-1 min-h-0 {isResizing ? 'cursor-col-resize select-none' : ''}"
+			bind:this={containerRef}
+			onmousemove={handleResize}
+			onmouseup={stopResize}
+			onmouseleave={stopResize}
+			ontouchmove={handleResize}
+			ontouchend={stopResize}
+			role="presentation"
+		>
+			<!-- Left: Agenda Panel (resizable) -->
+			<div class="flex flex-col min-w-64" style="width: {leftPanelWidth}%">
 				<div class="flex-1 overflow-auto">
 					<AgendaNotePanel
 						agendas={meeting.agendas}
@@ -634,8 +668,22 @@
 				</div>
 			</div>
 
-			<!-- Right: Note/Sketch Area (75%) -->
-			<div class="flex-1 flex flex-col min-h-0">
+			<!-- Resizable Divider -->
+			<div
+				class="w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex-shrink-0 transition-colors relative group"
+				onmousedown={startResize}
+				ontouchstart={startResize}
+				role="separator"
+				aria-orientation="vertical"
+				tabindex="0"
+			>
+				<div class="absolute inset-y-0 -left-1 -right-1 group-hover:bg-blue-400/20"></div>
+				<!-- Drag handle indicator -->
+				<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded bg-gray-400 group-hover:bg-blue-500 transition-colors"></div>
+			</div>
+
+			<!-- Right: Note/Sketch Area -->
+			<div class="flex-1 flex flex-col min-h-0 min-w-64">
 				<div class="flex-1 min-h-0 overflow-hidden">
 					<NoteSketchArea
 						bind:activeTab
