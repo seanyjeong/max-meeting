@@ -746,37 +746,47 @@
 		.meeting-report {
 			max-width: none;
 			margin: 0;
-			padding: 1.5cm;
+			padding: 1cm 1.5cm;
 			box-shadow: none;
 			border-radius: 0;
 		}
 
+		.report-section {
+			margin-bottom: 1.5rem;
+		}
+
 		.agenda-content-grid {
-			grid-template-columns: 1fr 280px;
-			gap: 1.5rem;
+			grid-template-columns: 1fr 240px;
+			gap: 1rem;
 		}
 
 		.agenda-block {
+			margin-bottom: 1rem;
+			padding: 1rem;
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+
+		.child-agenda-block {
+			margin-bottom: 0.75rem;
+			padding: 0.75rem;
 			page-break-inside: avoid;
 			break-inside: avoid;
 		}
 
 		.action-items-section {
-			page-break-before: auto;
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+
+		.summary-content {
+			padding: 1rem;
 		}
 
 		/* Force colors on print */
-		.agenda-number {
-			-webkit-print-color-adjust: exact;
-			print-color-adjust: exact;
-		}
-
+		.agenda-number,
 		.notes-section,
-		.action-items-section {
-			-webkit-print-color-adjust: exact;
-			print-color-adjust: exact;
-		}
-
+		.action-items-section,
 		.priority {
 			-webkit-print-color-adjust: exact;
 			print-color-adjust: exact;

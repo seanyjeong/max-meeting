@@ -122,6 +122,7 @@
 </script>
 
 {#if browser}
+<div class="no-print">
 	<!-- Toggle Button (always visible) -->
 	<button
 		type="button"
@@ -181,6 +182,7 @@
 			{/if}
 		</div>
 	{/if}
+</div>
 {/if}
 
 <style>
