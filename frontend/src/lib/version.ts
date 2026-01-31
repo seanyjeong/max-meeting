@@ -2,7 +2,7 @@
  * App version configuration
  * Update this when deploying new versions
  */
-export const APP_VERSION = '1.10.0';
+export const APP_VERSION = '1.10.1';
 export const BUILD_DATE = '2026-01-31';
 
 // Version history (for reference)

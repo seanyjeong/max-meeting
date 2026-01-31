@@ -403,9 +403,23 @@ function createResultsStore() {
 
 	// Action Items CRUD
 	async function createActionItem(meetingId: number, item: Partial<ActionItem>): Promise<void> {
+		let resultId: number | null = null;
+		update((state) => {
+			resultId = state.currentResult?.id ?? null;
+			return state;
+		});
+
+		if (!resultId) {
+			update((state) => ({
+				...state,
+				error: 'No result found for this meeting'
+			}));
+			return;
+		}
+
 		try {
 			const response = await api.post<{ data: ActionItem }>(
-				`/meetings/${meetingId}/action-items`,
+				`/results/${resultId}/action-items`,
 				item
 			);
 
