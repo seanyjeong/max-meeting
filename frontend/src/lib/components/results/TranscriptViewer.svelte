@@ -11,6 +11,9 @@
 
 	let { agendas = [], onSegmentClick, highlightText = '' }: Props = $props();
 
+	// Filter to only root-level agendas (parent_id is null/undefined)
+	let rootAgendas = $derived(agendas.filter(a => a.parent_id === null || a.parent_id === undefined));
+
 	let searchQuery = $state('');
 	let filterSpeaker = $state<string | null>(null);
 	let selectedAgendaId = $state<number | 'all'>('all');
@@ -77,8 +80,8 @@
 
 			// Agenda filter
 			let matchesAgenda = true;
-			if (selectedAgendaId !== 'all' && agendas.length > 0) {
-				const agenda = agendas.find(a => a.id === selectedAgendaId);
+			if (selectedAgendaId !== 'all' && rootAgendas.length > 0) {
+				const agenda = rootAgendas.find(a => a.id === selectedAgendaId);
 				if (agenda) {
 					// 자식안건 필터 적용
 					if (selectedChildId !== 'all' && agenda.children) {
@@ -204,7 +207,7 @@
 
 <div class="transcript-viewer">
 	<!-- Agenda Tabs with Child Dropdown -->
-	{#if agendas.length > 0}
+	{#if rootAgendas.length > 0}
 		<div class="agenda-tabs">
 			<button
 				type="button"
@@ -213,7 +216,7 @@
 			>
 				전체
 			</button>
-			{#each agendas as agenda (agenda.id)}
+			{#each rootAgendas as agenda (agenda.id)}
 				{@const duration = getAgendaDuration(agenda)}
 				{@const hasSegments = agenda.time_segments?.length || agenda.started_at_seconds !== null}
 				{@const hasChildren = agenda.children && agenda.children.length > 0}
