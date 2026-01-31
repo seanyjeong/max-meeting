@@ -51,6 +51,7 @@
 	let activeTab = $state<'memo' | 'pen' | 'task'>('memo');
 	let agendaNotes = $state<Map<number, string>>(new Map());
 	let agendaSketches = $state<Map<number, any>>(new Map());
+	let savedSketchAgendas = $state<Set<number>>(new Set()); // Track which sketches have been saved
 
 	// Recovery modal
 	let showRecoveryModal = $state(false);
@@ -122,8 +123,9 @@
 			URL.revokeObjectURL(previewAudioUrl);
 		}
 
-		// Save notes on destroy
+		// Save notes and sketches on destroy
 		await notesStore.forceSave();
+		await saveAllSketches();
 		notesStore.cleanup();
 	});
 
@@ -143,7 +145,49 @@
 		if (meeting && meeting.agendas[currentAgendaIndex]) {
 			const agendaId = meeting.agendas[currentAgendaIndex].id;
 			agendaSketches = new Map(agendaSketches.set(agendaId, snapshot));
+			// Mark as unsaved when changed
+			savedSketchAgendas.delete(agendaId);
+			savedSketchAgendas = new Set(savedSketchAgendas);
 		}
+	}
+
+	// Save sketch to backend
+	async function saveSketchToBackend(agendaId: number): Promise<boolean> {
+		const snapshot = agendaSketches.get(agendaId);
+		if (!snapshot?.dataUrl || savedSketchAgendas.has(agendaId)) {
+			return true; // Nothing to save or already saved
+		}
+
+		// Check if sketch has any strokes
+		if (!snapshot.strokes || snapshot.strokes.length === 0) {
+			return true; // Empty sketch, don't save
+		}
+
+		try {
+			await api.post(`/meetings/${meetingId}/sketches`, {
+				agenda_id: agendaId,
+				image_data: snapshot.dataUrl,
+				timestamp_seconds: $recordingTime || null
+			});
+			savedSketchAgendas.add(agendaId);
+			savedSketchAgendas = new Set(savedSketchAgendas);
+			console.log('[record] Sketch saved for agenda:', agendaId);
+			return true;
+		} catch (error) {
+			console.error('[record] Failed to save sketch:', error);
+			return false;
+		}
+	}
+
+	// Save all unsaved sketches
+	async function saveAllSketches(): Promise<void> {
+		const promises: Promise<boolean>[] = [];
+		for (const [agendaId, snapshot] of agendaSketches.entries()) {
+			if (snapshot?.strokes?.length > 0 && !savedSketchAgendas.has(agendaId)) {
+				promises.push(saveSketchToBackend(agendaId));
+			}
+		}
+		await Promise.all(promises);
 	}
 
 	function handleTabChange(tab: 'memo' | 'pen' | 'task') {
@@ -304,6 +348,11 @@
 
 	// Time segment management
 	async function handleAgendaChange(prevAgendaId: number | null, newAgendaId: number, currentTime: number) {
+		// Save sketch for previous agenda before switching
+		if (prevAgendaId !== null && prevAgendaId !== newAgendaId) {
+			await saveSketchToBackend(prevAgendaId);
+		}
+
 		// Close previous segment
 		if (prevAgendaId !== null && prevAgendaId !== newAgendaId) {
 			await closeSegment(prevAgendaId, currentTime);
@@ -482,6 +531,10 @@
 		// Save notes first
 		await notesStore.forceSave();
 		console.log('[record] Notes saved');
+
+		// Save all sketches
+		await saveAllSketches();
+		console.log('[record] Sketches saved');
 
 		// Update meeting status to completed
 		try {

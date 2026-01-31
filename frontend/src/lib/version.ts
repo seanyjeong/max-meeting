@@ -2,7 +2,7 @@
  * App version configuration
  * Update this when deploying new versions
  */
-export const APP_VERSION = '1.12.0';
+export const APP_VERSION = '1.13.0';
 export const BUILD_DATE = '2026-01-31';
 
 // Version history (for reference)
@@ -17,6 +17,9 @@ export const BUILD_DATE = '2026-01-31';
 // 1.8.0 - 질문 수정/삭제 버튼 태블릿 지원
 // 1.9.0 - 안건 재매칭 분석 UI 추가
 // 1.10.0 - 분석 완료 메시지 추가, 버전 표시 수정
+// 1.11.0 - 업무배치 탭 추가, 탭 이름 변경 (메모/필기/업무배치)
+// 1.12.0 - 메모 포스트잇 표시 추가
+// 1.13.0 - 필기 갤러리 탭 추가, 스케치 백엔드 저장
 
 export function getVersionInfo() {
 	return {

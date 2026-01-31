@@ -14,6 +14,7 @@
 	import { resultsStore, hasResult, isVerified } from '$lib/stores/results';
 	import { toast } from '$lib/stores/toast';
 	import { api } from '$lib/api';
+	import { PUBLIC_API_URL } from '$env/static/public';
 	import { exportToPdf, copyToClipboard } from '$lib/utils/exportPdf';
 	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio, Mic, Loader2, Printer } from 'lucide-svelte';
 	import type { MeetingDetail } from '$lib/stores/meeting';
@@ -46,8 +47,18 @@
 		updated_at: string;
 	}
 
+	// Meeting sketch interface
+	interface MeetingSketch {
+		id: number;
+		meeting_id: number;
+		agenda_id: number | null;
+		thumbnail_path: string | null;
+		created_at: string;
+		updated_at: string;
+	}
+
 	let meetingId = $derived(parseInt($page.params.id ?? '0'));
-	let activeTab = $state<'summary' | 'discussions' | 'actions' | 'transcript'>('summary');
+	let activeTab = $state<'summary' | 'discussions' | 'actions' | 'transcript' | 'sketches'>('summary');
 	let speakerMapping = $state<Record<string, number>>({});
 	let showShortcutsHelp = $state(false);
 
@@ -58,6 +69,9 @@
 
 	// Meeting notes state
 	let meetingNotes = $state<MeetingNote[]>([]);
+
+	// Meeting sketches state
+	let meetingSketches = $state<MeetingSketch[]>([]);
 
 	// Progress tracking for U1
 	let sttStartTime = $state<number | null>(null);
@@ -143,6 +157,29 @@
 	// Get notes for a specific agenda
 	function getNotesForAgenda(agendaId: number): MeetingNote[] {
 		return meetingNotes.filter(n => n.agenda_id === agendaId);
+	}
+
+	async function loadMeetingSketches() {
+		try {
+			const response = await api.get<{ data: MeetingSketch[]; meta: { total: number } }>(
+				`/meetings/${meetingId}/sketches`
+			);
+			meetingSketches = response.data || [];
+		} catch (error) {
+			logger.error('Failed to load meeting sketches:', error);
+			meetingSketches = [];
+		}
+	}
+
+	// Get sketches for a specific agenda
+	function getSketchesForAgenda(agendaId: number): MeetingSketch[] {
+		return meetingSketches.filter(s => s.agenda_id === agendaId);
+	}
+
+	// Get sketch image URL
+	function getSketchImageUrl(sketchId: number): string {
+		const baseUrl = PUBLIC_API_URL || '/api/v1';
+		return `${baseUrl}/sketches/${sketchId}/image`;
 	}
 
 	async function triggerSTT() {
@@ -241,6 +278,7 @@
 		{ key: '1', description: '요약 탭', action: () => { activeTab = 'summary' }, category: '탭 전환' },
 		{ key: '2', description: '실행 항목 탭', action: () => { activeTab = 'actions' }, category: '탭 전환' },
 		{ key: '3', description: '대화 내용 탭', action: () => { activeTab = 'transcript' }, category: '탭 전환' },
+		{ key: '4', description: '필기 탭', action: () => { activeTab = 'sketches' }, category: '탭 전환' },
 		{ key: 'p', modifiers: ['ctrl'], description: 'PDF 내보내기', action: () => { handleExportPdf() }, category: '내보내기' },
 		{ key: 'c', modifiers: ['ctrl', 'shift'], description: '클립보드에 복사', action: () => { handleCopyToClipboard() }, category: '내보내기' },
 		{ key: 'e', description: '수정 모드', action: () => { handleEdit() }, category: '편집' },
@@ -342,7 +380,8 @@
 			resultsStore.loadResult(meetingId),
 			resultsStore.loadTranscript(meetingId),
 			loadRecordingsStatus(),
-			loadMeetingNotes()
+			loadMeetingNotes(),
+			loadMeetingSketches()
 		]);
 
 		// Start polling if processing or just uploaded (auto-STT may be running)
@@ -609,6 +648,19 @@
 					>
 						대화 내용
 					</button>
+				<button
+					type="button"
+					class="tab"
+					class:active={activeTab === 'sketches'}
+					role="tab"
+					aria-selected={activeTab === 'sketches'}
+					onclick={() => activeTab = 'sketches'}
+				>
+					필기
+					{#if meetingSketches.length > 0}
+						<span class="tab-badge">{meetingSketches.length}</span>
+					{/if}
+				</button>
 				</div>
 
 				<!-- Tab Content -->
@@ -716,6 +768,103 @@
 
 						<!-- Transcript Viewer -->
 						<TranscriptViewer agendas={$currentMeeting?.agendas || []} />
+					{:else if activeTab === 'sketches'}
+					<!-- Sketches Gallery -->
+					{#if meetingSketches.length === 0}
+						<Card>
+							{#snippet children()}
+								<div class="text-center py-12">
+									<svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+									</svg>
+									<h3 class="text-lg font-medium text-gray-900 mb-2">필기가 없습니다</h3>
+									<p class="text-gray-500">회의 중 필기 탭에서 작성한 내용이 여기에 표시됩니다.</p>
+								</div>
+							{/snippet}
+						</Card>
+					{:else}
+						<!-- Group sketches by agenda -->
+						{#each $currentMeeting?.agendas || [] as agenda}
+							{@const agendaSketches = getSketchesForAgenda(agenda.id)}
+							{#if agendaSketches.length > 0}
+								<Card class="mb-4">
+									{#snippet children()}
+										<h3 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+											<svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+											</svg>
+											{agenda.title}
+										</h3>
+										<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+											{#each agendaSketches as sketch}
+												<a
+													href={getSketchImageUrl(sketch.id)}
+													target="_blank"
+													rel="noopener noreferrer"
+													class="sketch-thumbnail group"
+												>
+													<img
+														src={getSketchImageUrl(sketch.id)}
+														alt="필기 {sketch.id}"
+														class="w-full h-32 object-cover rounded-lg border border-gray-200 group-hover:border-blue-400 transition-colors"
+														loading="lazy"
+													/>
+													<div class="mt-2 text-xs text-gray-500">
+														{new Date(sketch.created_at).toLocaleString('ko-KR', {
+															month: 'short',
+															day: 'numeric',
+															hour: '2-digit',
+															minute: '2-digit'
+														})}
+													</div>
+												</a>
+											{/each}
+										</div>
+									{/snippet}
+								</Card>
+							{/if}
+						{/each}
+
+						<!-- Sketches without agenda -->
+						{@const noAgendaSketches = meetingSketches.filter(s => !s.agenda_id)}
+						{#if noAgendaSketches.length > 0}
+							<Card>
+								{#snippet children()}
+									<h3 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+										<svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+										</svg>
+										기타 필기
+									</h3>
+									<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+										{#each noAgendaSketches as sketch}
+											<a
+												href={getSketchImageUrl(sketch.id)}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="sketch-thumbnail group"
+											>
+												<img
+													src={getSketchImageUrl(sketch.id)}
+													alt="필기 {sketch.id}"
+													class="w-full h-32 object-cover rounded-lg border border-gray-200 group-hover:border-blue-400 transition-colors"
+													loading="lazy"
+												/>
+												<div class="mt-2 text-xs text-gray-500">
+													{new Date(sketch.created_at).toLocaleString('ko-KR', {
+														month: 'short',
+														day: 'numeric',
+														hour: '2-digit',
+														minute: '2-digit'
+													})}
+												</div>
+											</a>
+										{/each}
+									</div>
+								{/snippet}
+							</Card>
+						{/if}
+					{/if}
 					{/if}
 				</div>
 			{:else}
