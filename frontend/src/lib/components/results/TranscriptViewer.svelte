@@ -16,6 +16,7 @@
 	let selectedAgendaId = $state<number | 'all'>('all');
 	let selectedChildId = $state<number | 'all'>('all');
 	let showChildDropdown = $state<number | null>(null);
+	let dropdownPosition = $state({ top: 0, left: 0 });
 
 	// Get unique speakers
 	let speakers = $derived(
@@ -95,10 +96,17 @@
 		showChildDropdown = null;
 	}
 
-	function toggleChildDropdown(agendaId: number) {
+	function toggleChildDropdown(agendaId: number, event: MouseEvent) {
 		if (showChildDropdown === agendaId) {
 			showChildDropdown = null;
 		} else {
+			// 버튼 위치 기반으로 드롭다운 위치 계산
+			const button = event.currentTarget as HTMLElement;
+			const rect = button.getBoundingClientRect();
+			dropdownPosition = {
+				top: rect.bottom + 4,
+				left: rect.left
+			};
 			showChildDropdown = agendaId;
 		}
 	}
@@ -168,6 +176,21 @@
 	function handleSegmentClick(segment: TranscriptSegment) {
 		onSegmentClick?.(segment);
 	}
+
+	// 외부 클릭 시 드롭다운 닫기
+	function handleClickOutside(event: MouseEvent) {
+		const target = event.target as HTMLElement;
+		if (!target.closest('.agenda-tab-wrapper') && !target.closest('.child-dropdown')) {
+			showChildDropdown = null;
+		}
+	}
+
+	$effect(() => {
+		if (showChildDropdown !== null) {
+			document.addEventListener('click', handleClickOutside);
+			return () => document.removeEventListener('click', handleClickOutside);
+		}
+	});
 </script>
 
 <div class="transcript-viewer">
@@ -189,7 +212,7 @@
 					<button
 						type="button"
 						class="agenda-tab {selectedAgendaId === agenda.id ? 'active' : ''} {!hasSegments && !hasChildren ? 'disabled' : ''}"
-						onclick={() => hasChildren ? toggleChildDropdown(agenda.id) : (hasSegments && selectAgenda(agenda.id))}
+						onclick={(e) => hasChildren ? toggleChildDropdown(agenda.id, e) : (hasSegments && selectAgenda(agenda.id))}
 						disabled={!hasSegments && !hasChildren}
 					>
 						<span class="agenda-num">{agenda.order_num}.</span>
@@ -205,7 +228,7 @@
 
 					<!-- 자식안건 드롭다운 -->
 					{#if hasChildren && showChildDropdown === agenda.id}
-						<div class="child-dropdown">
+						<div class="child-dropdown" style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px;">
 							<button
 								type="button"
 								class="child-item {selectedAgendaId === agenda.id && selectedChildId === 'all' ? 'active' : ''}"
@@ -373,7 +396,8 @@
 		background: white;
 		border-radius: 0.5rem;
 		border: 1px solid #e5e7eb;
-		overflow: hidden;
+		/* overflow: hidden 제거 - 드롭다운이 밖으로 나올 수 있도록 */
+		position: relative;
 	}
 
 	/* Agenda Tabs */
@@ -384,7 +408,10 @@
 		background: #f0f9ff;
 		border-bottom: 1px solid #e5e7eb;
 		overflow-x: auto;
+		overflow-y: visible;
 		-webkit-overflow-scrolling: touch;
+		position: relative;
+		z-index: 20;
 	}
 
 	.agenda-tabs::-webkit-scrollbar {
@@ -442,10 +469,7 @@
 	}
 
 	.child-dropdown {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		margin-top: 0.25rem;
+		position: fixed;
 		min-width: 280px;
 		max-width: 400px;
 		max-height: 300px;
@@ -454,7 +478,7 @@
 		border: 1px solid #e5e7eb;
 		border-radius: 0.5rem;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		z-index: 100;
+		z-index: 1000;
 	}
 
 	.child-item {

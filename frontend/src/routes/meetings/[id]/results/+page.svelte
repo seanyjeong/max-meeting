@@ -118,7 +118,15 @@
 		// Find the most recent uploaded recording
 		const uploadedRecording = recordings.find(r => r.status === 'uploaded');
 		if (!uploadedRecording) {
-			toast.error('변환할 녹음이 없습니다.');
+			// 이미 처리 중이거나 완료된 경우 - 상태만 갱신
+			await loadRecordingsStatus();
+			if (processingStatus === 'processing') {
+				toast.info('이미 음성 변환이 진행 중입니다.');
+			} else if (processingStatus === 'ready') {
+				toast.success('음성 변환이 이미 완료되었습니다.');
+			} else {
+				toast.error('변환할 녹음이 없습니다.');
+			}
 			return;
 		}
 
@@ -149,9 +157,38 @@
 					}
 				}, 3000); // Poll every 3 seconds
 			}
-		} catch (error) {
+		} catch (error: any) {
 			logger.error('Failed to trigger STT:', error);
-			toast.error('변환 시작에 실패했습니다.');
+			// 400 Bad Request는 이미 처리 중인 경우 - 상태만 갱신
+			if (error?.status === 400) {
+				await loadRecordingsStatus();
+				// 현재 상태 재확인 (recordings 배열 기반)
+				const hasProcessing = recordings.some(r => r.status === 'processing');
+				if (hasProcessing) {
+					toast.info('이미 음성 변환이 진행 중입니다.');
+					// Start polling anyway
+					if (!statusPollInterval) {
+						sttStartTime = Date.now();
+						startProgressUpdate();
+						statusPollInterval = setInterval(async () => {
+							await loadRecordingsStatus();
+							const isReady = recordings.some(r => r.status === 'completed');
+							if (isReady) {
+								await resultsStore.loadTranscript(meetingId);
+								toast.success('변환 완료! 회의록을 생성할 수 있습니다.');
+								if (statusPollInterval) {
+									clearInterval(statusPollInterval);
+									statusPollInterval = null;
+								}
+							}
+						}, 3000);
+					}
+				} else {
+					toast.error('변환 시작에 실패했습니다.');
+				}
+			} else {
+				toast.error('변환 시작에 실패했습니다.');
+			}
 		}
 	}
 

@@ -58,6 +58,10 @@
 	let agendas = $state<AgendaInput[]>([{ id: crypto.randomUUID(), title: '', description: '', questions: [], children: [] }]);
 	let agendaTextInput = $state('');
 	let isParsing = $state(false);
+
+	// 회의 생성 프로그레스 상태
+	let savingProgress = $state(0);
+	let savingStep = $state('');
 	let generatingQuestionsFor = $state<string | null>(null);
 	let parseDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 	let isAutoPreviewEnabled = $state(true);
@@ -342,9 +346,25 @@
 		}
 
 		isSaving = true;
+		savingProgress = 0;
+		savingStep = '회의 생성 중...';
+
+		// 총 안건 수 계산 (자식 포함)
+		function countAgendas(list: AgendaInput[]): number {
+			return list.reduce((sum, a) => {
+				let count = 1;
+				if (a.children && a.children.length > 0) {
+					count += countAgendas(a.children.filter(c => c.title.trim()));
+				}
+				return sum + count;
+			}, 0);
+		}
+		const totalAgendas = countAgendas(validAgendas);
+		let savedAgendas = 0;
 
 		try {
 			// Create meeting - API returns MeetingDetailResponse directly (not wrapped in data)
+			savingProgress = 10;
 			const meetingResponse = await api.post<{ id: number }>('/meetings', {
 				title: title.trim(),
 				type_id: typeId,
@@ -354,6 +374,8 @@
 			});
 
 			const meetingId = meetingResponse.id;
+			savingProgress = 20;
+			savingStep = '안건 저장 중...';
 
 			// Add agendas recursively (including children)
 			async function saveAgendasRecursively(
@@ -369,6 +391,11 @@
 						parent_id: parentId
 					});
 
+					savedAgendas++;
+					// 20% ~ 90% 구간에서 안건 저장 진행률 표시
+					savingProgress = 20 + Math.round((savedAgendas / totalAgendas) * 70);
+					savingStep = `안건 저장 중... (${savedAgendas}/${totalAgendas})`;
+
 					// Save children recursively
 					if (agenda.children && agenda.children.length > 0) {
 						const validChildren = agenda.children.filter(c => c.title.trim());
@@ -381,12 +408,19 @@
 
 			await saveAgendasRecursively(validAgendas);
 
+			savingProgress = 100;
+			savingStep = '완료!';
+
+			// 잠시 완료 상태 표시 후 이동
+			await new Promise(resolve => setTimeout(resolve, 300));
 			goto(`/meetings/${meetingId}`);
 		} catch (err) {
 			if (import.meta.env.DEV) console.error('Failed to create meeting:', err);
 			error = '회의 생성에 실패했습니다. 다시 시도하세요.';
 		} finally {
 			isSaving = false;
+			savingProgress = 0;
+			savingStep = '';
 		}
 	}
 
@@ -552,6 +586,39 @@
 </svelte:head>
 
 <div class="max-w-3xl mx-auto">
+	<!-- 회의 생성 프로그레스 모달 -->
+	{#if isSaving}
+		<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+			<div class="bg-white rounded-xl p-8 shadow-2xl max-w-sm w-full mx-4">
+				<div class="text-center">
+					<!-- 원형 프로그레스 게이지 -->
+					<div class="relative w-24 h-24 mx-auto mb-4">
+						<svg class="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+							<!-- 배경 원 -->
+							<circle cx="50" cy="50" r="40" stroke="#e5e7eb" stroke-width="8" fill="none" />
+							<!-- 프로그레스 원 -->
+							<circle
+								cx="50" cy="50" r="40"
+								stroke="#3b82f6"
+								stroke-width="8"
+								fill="none"
+								stroke-linecap="round"
+								stroke-dasharray={2 * Math.PI * 40}
+								stroke-dashoffset={2 * Math.PI * 40 * (1 - savingProgress / 100)}
+								class="transition-all duration-300 ease-out"
+							/>
+						</svg>
+						<!-- 퍼센트 텍스트 -->
+						<div class="absolute inset-0 flex items-center justify-center">
+							<span class="text-2xl font-bold text-gray-900">{savingProgress}%</span>
+						</div>
+					</div>
+					<p class="text-gray-700 font-medium">{savingStep}</p>
+				</div>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Debug Panel (collapsible) -->
 	{#if debugLogs.length > 0}
 		<details class="mb-4 bg-gray-800 text-green-400 rounded-lg overflow-hidden text-xs">
