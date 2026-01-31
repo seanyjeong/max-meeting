@@ -88,6 +88,7 @@ def generate_meeting_result(
         from app.models import (
             ActionItem,
             ActionItemPriority,
+            ActionItemStatus,
             Agenda,
             AgendaDiscussion,
             DecisionType,
@@ -395,12 +396,17 @@ def generate_meeting_result(
                     except (ValueError, TypeError):
                         pass
 
+                # title is required, use content if not provided
+                title = item.get("title") or item["content"][:200]
+
                 action_item = ActionItem(
                     meeting_id=meeting_id,
                     agenda_id=agenda_id,
+                    title=title,
                     content=item["content"],
                     due_date=due_date,
                     priority=ActionItemPriority.MEDIUM,
+                    status=ActionItemStatus.PENDING,
                 )
                 session.add(action_item)
 

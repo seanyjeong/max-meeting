@@ -269,6 +269,43 @@
 														{/each}
 													</div>
 												{/if}
+
+												<!-- Grandchild Agendas (손자 안건) -->
+												{#if child.children && child.children.length > 0}
+													{#each child.children as grandchild, grandchildIdx}
+														<div class="grandchild-agenda-block">
+															<h5 class="grandchild-title">
+																{idx + 1}.{childIdx + 1}.{grandchildIdx + 1} {grandchild.title}
+															</h5>
+
+															<!-- Discussion for grandchild -->
+															{#if getDiscussion(grandchild.id)}
+																<div class="discussion-block">
+																	<p>{getDiscussion(grandchild.id)}</p>
+																	{#if getKeyPoints(grandchild.id).length > 0}
+																		<ul class="key-points">
+																			{#each getKeyPoints(grandchild.id) as point}
+																				<li>{point}</li>
+																			{/each}
+																		</ul>
+																	{/if}
+																</div>
+															{/if}
+
+															<!-- Action items for grandchild -->
+															{#if getActionItemsForAgenda(grandchild.id).length > 0}
+																<div class="action-items-inline">
+																	{#each getActionItemsForAgenda(grandchild.id) as item}
+																		<div class="action-item-mini">
+																			<CheckCircle2 class="w-4 h-4 text-blue-500" />
+																			<span>{item.title}</span>
+																		</div>
+																	{/each}
+																</div>
+															{/if}
+														</div>
+													{/each}
+												{/if}
 											</div>
 										{/each}
 									{:else}
@@ -586,6 +623,22 @@
 		color: #6b7280;
 		font-size: 0.875rem;
 		margin: 0 0 1rem 0;
+	}
+
+	/* Grandchild Agenda Blocks (손자 안건) */
+	.grandchild-agenda-block {
+		margin: 1rem 0 1rem 1rem;
+		padding: 0.75rem 1rem;
+		background: #f9fafb;
+		border-left: 3px solid #93c5fd;
+		border-radius: 0 0.375rem 0.375rem 0;
+	}
+
+	.grandchild-title {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: #4b5563;
+		margin: 0 0 0.5rem 0;
 	}
 
 	/* Discussion Block */

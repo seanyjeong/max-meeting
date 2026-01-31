@@ -100,7 +100,8 @@
 		if (!currentAgenda) return;
 		const target = event.target as HTMLTextAreaElement;
 		const content = target.value;
-		const agendaId = currentAgenda.id;
+		// 자식/손자 안건 선택 시 해당 ID 사용, 없으면 대안건 ID
+		const agendaId = activeChildId || currentAgenda.id;
 
 		const existingTimer = noteDebounceTimers.get(agendaId);
 		if (existingTimer) {

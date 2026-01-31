@@ -103,11 +103,25 @@
 			if (selectedAgendaId !== 'all' && rootAgendas.length > 0) {
 				const agenda = rootAgendas.find(a => a.id === selectedAgendaId);
 				if (agenda) {
-					// 자식안건 필터 적용
+					// 자식/손자안건 필터 적용
 					if (selectedChildId !== 'all' && agenda.children) {
-						const child = agenda.children.find(c => c.id === selectedChildId);
+						// 먼저 자식안건에서 찾기
+						let child = agenda.children.find(c => c.id === selectedChildId);
+						// 자식안건에서 못 찾으면 손자안건에서 찾기
+						if (!child) {
+							for (const c of agenda.children) {
+								if (c.children) {
+									const grandchild = c.children.find(gc => gc.id === selectedChildId);
+									if (grandchild) {
+										child = grandchild;
+										break;
+									}
+								}
+							}
+						}
 						if (child) {
-							matchesAgenda = isSegmentInAgenda(segment, child);
+							// 재귀적으로 하위 안건 포함
+							matchesAgenda = isSegmentInAgendaRecursive(segment, child);
 						} else {
 							matchesAgenda = false;
 						}
@@ -333,14 +347,29 @@
 							</button>
 							{#each agenda.children as child, idx (child.id)}
 								{@const childHasSegments = child.time_segments?.length || child.started_at_seconds !== null}
+								{@const hasGrandchildren = child.children && child.children.length > 0}
 								<button
 									type="button"
-									class="child-item {selectedChildId === child.id ? 'active' : ''} {!childHasSegments ? 'disabled' : ''}"
-									onclick={() => childHasSegments && selectAgenda(agenda.id, child.id)}
-									disabled={!childHasSegments}
+									class="child-item {selectedChildId === child.id ? 'active' : ''} {!childHasSegments && !hasGrandchildren ? 'disabled' : ''}"
+									onclick={() => (childHasSegments || hasGrandchildren) && selectAgenda(agenda.id, child.id)}
+									disabled={!childHasSegments && !hasGrandchildren}
 								>
 									{agenda.order_num}.{idx + 1} {truncate(child.title, 12)}
 								</button>
+								<!-- 손자안건 (Grandchildren) -->
+								{#if hasGrandchildren}
+									{#each child.children as grandchild, gidx (grandchild.id)}
+										{@const gcHasSegments = grandchild.time_segments?.length || grandchild.started_at_seconds !== null}
+										<button
+											type="button"
+											class="child-item grandchild-item {selectedChildId === grandchild.id ? 'active' : ''} {!gcHasSegments ? 'disabled' : ''}"
+											onclick={() => gcHasSegments && selectAgenda(agenda.id, grandchild.id)}
+											disabled={!gcHasSegments}
+										>
+											{agenda.order_num}.{idx + 1}.{gidx + 1} {truncate(grandchild.title, 10)}
+										</button>
+									{/each}
+								{/if}
 							{/each}
 						</div>
 					{/if}
@@ -680,6 +709,12 @@
 
 	.child-item + .child-item {
 		border-top: 1px solid #f3f4f6;
+	}
+
+	.grandchild-item {
+		padding-left: 1.5rem;
+		font-size: 0.75rem;
+		background: #f9fafb;
 	}
 
 	.viewer-header {
