@@ -41,6 +41,7 @@ def _convert_agenda_to_brief(agenda) -> AgendaBrief:
         description=agenda.description,
         status=agenda.status,
         started_at_seconds=agenda.started_at_seconds,
+        time_segments=agenda.time_segments,
         parent_id=agenda.parent_id,
         level=agenda.level,
         questions=[
