@@ -3,10 +3,11 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Breadcrumb, Button, LoadingSpinner } from '$lib/components';
+	import PostItNote from '$lib/components/results/PostItNote.svelte';
 	import { currentMeeting, isLoading } from '$lib/stores/meeting';
 	import { resultsStore, hasResult } from '$lib/stores/results';
 	import { api } from '$lib/api';
-	import { ArrowLeft, Printer, Download, FileText, Image } from 'lucide-svelte';
+	import { ArrowLeft, Printer, FileText, CheckCircle2 } from 'lucide-svelte';
 	import type { MeetingDetail, Agenda } from '$lib/stores/meeting';
 	import { formatDateTime } from '$lib/utils/format';
 	import { logger } from '$lib/utils/logger';
@@ -19,19 +20,8 @@
 		created_at: string;
 	}
 
-	interface Sketch {
-		id: number;
-		agenda_id: number;
-		snapshot_url?: string;
-		thumbnail_url?: string;
-		created_at: string;
-	}
-
 	let meetingId = $derived(parseInt($page.params.id ?? '0'));
 	let notes = $state<Note[]>([]);
-	let sketches = $state<Sketch[]>([]);
-	let showSketchModal = $state(false);
-	let selectedSketchAgendaId = $state<number | null>(null);
 
 	// Breadcrumb
 	let breadcrumbItems = $derived([
@@ -41,6 +31,12 @@
 		{ label: '결과', href: `/meetings/${meetingId}/results` },
 		{ label: '회의록' }
 	]);
+
+	// PostIt colors by agenda index
+	const postItColors: Array<'yellow' | 'pink' | 'green' | 'blue'> = ['yellow', 'pink', 'green', 'blue'];
+	function getPostItColor(index: number): 'yellow' | 'pink' | 'green' | 'blue' {
+		return postItColors[index % postItColors.length];
+	}
 
 	onMount(async () => {
 		// Load meeting if not loaded
@@ -63,8 +59,8 @@
 			await resultsStore.loadResult(meetingId);
 		}
 
-		// Load notes and sketches
-		await Promise.all([loadNotes(), loadSketches()]);
+		// Load notes
+		await loadNotes();
 	});
 
 	async function loadNotes() {
@@ -76,21 +72,8 @@
 		}
 	}
 
-	async function loadSketches() {
-		try {
-			const response = await api.get<{ data: Sketch[] }>(`/meetings/${meetingId}/sketches`);
-			sketches = response.data || [];
-		} catch (error) {
-			logger.error('Failed to load sketches:', error);
-		}
-	}
-
 	function getNotesForAgenda(agendaId: number): Note[] {
 		return notes.filter(n => n.agenda_id === agendaId);
-	}
-
-	function getSketchesForAgenda(agendaId: number): Sketch[] {
-		return sketches.filter(s => s.agenda_id === agendaId);
 	}
 
 	function getDiscussion(agendaId: number): string | null {
@@ -107,40 +90,28 @@
 		return discussion?.key_points || [];
 	}
 
+	function getActionItemsForAgenda(agendaId: number) {
+		return $resultsStore.actionItems.filter(item => item.agenda_id === agendaId);
+	}
+
 	function handlePrint() {
 		window.print();
 	}
 
-	function openSketchModal(agendaId: number) {
-		selectedSketchAgendaId = agendaId;
-		showSketchModal = true;
+	// Check if agenda has any right-side content (notes only, no sketches)
+	function hasRightContent(agendaId: number): boolean {
+		return getNotesForAgenda(agendaId).length > 0;
 	}
 
-	function closeSketchModal() {
-		showSketchModal = false;
-		selectedSketchAgendaId = null;
-	}
-
-	// Get all agendas flattened with parent info for sketch modal
-	function getAllAgendaIds(): number[] {
-		const ids: number[] = [];
-		for (const agenda of $currentMeeting?.agendas || []) {
-			ids.push(agenda.id);
-			for (const child of agenda.children || []) {
-				ids.push(child.id);
-			}
+	// Check if agenda has any content at all (including children)
+	function agendaHasContent(agenda: Agenda): boolean {
+		if (getDiscussion(agenda.id) || hasRightContent(agenda.id)) return true;
+		if (agenda.children) {
+			return agenda.children.some(child =>
+				getDiscussion(child.id) || hasRightContent(child.id)
+			);
 		}
-		return ids;
-	}
-
-	function getAgendaTitle(agendaId: number): string {
-		for (const agenda of $currentMeeting?.agendas || []) {
-			if (agenda.id === agendaId) return agenda.title;
-			for (const child of agenda.children || []) {
-				if (child.id === agendaId) return child.title;
-			}
-		}
-		return '알 수 없음';
+		return false;
 	}
 </script>
 
@@ -218,17 +189,23 @@
 			<!-- Summary Section -->
 			{#if $resultsStore.currentResult?.summary}
 				<section class="report-section">
-					<h2 class="section-title">회의 요약</h2>
+					<h2 class="section-title">
+						<FileText class="w-5 h-5" />
+						회의 요약
+					</h2>
 					<div class="section-content summary-content">
 						{$resultsStore.currentResult.summary}
 					</div>
 				</section>
 			{/if}
 
-			<!-- Agenda Sections -->
+			<!-- Agenda Sections with 2-Column Layout -->
 			{#if $currentMeeting.agendas && $currentMeeting.agendas.length > 0}
 				<section class="report-section">
-					<h2 class="section-title">안건별 상세</h2>
+					<h2 class="section-title">
+						<FileText class="w-5 h-5" />
+						안건별 상세
+					</h2>
 
 					{#each $currentMeeting.agendas as agenda, idx}
 						<div class="agenda-block">
@@ -241,26 +218,63 @@
 								<p class="agenda-description">{agenda.description}</p>
 							{/if}
 
-							<!-- Child Agendas -->
-							{#if agenda.children && agenda.children.length > 0}
-								{#each agenda.children as child, childIdx}
-									<div class="child-agenda-block">
-										<h4 class="child-title">
-											{idx + 1}.{childIdx + 1} {child.title}
-										</h4>
+							<!-- 2-Column Layout for agenda content -->
+							<div class="agenda-content-grid" class:single-column={!hasRightContent(agenda.id) && !(agenda.children?.some(c => hasRightContent(c.id)))}>
+								<!-- Left Column: Discussion -->
+								<div class="content-left">
+									{#if agenda.children && agenda.children.length > 0}
+										<!-- Child Agendas -->
+										{#each agenda.children as child, childIdx}
+											<div class="child-agenda-block">
+												<h4 class="child-title">
+													{idx + 1}.{childIdx + 1} {child.title}
+												</h4>
 
-										{#if child.description}
-											<p class="child-description">{child.description}</p>
-										{/if}
+												{#if child.description}
+													<p class="child-description">{child.description}</p>
+												{/if}
 
-										<!-- Discussion for child -->
-										{#if getDiscussion(child.id)}
+												<!-- Discussion for child -->
+												{#if getDiscussion(child.id)}
+													<div class="discussion-block">
+														<h5 class="block-label">토론 내용</h5>
+														<p>{getDiscussion(child.id)}</p>
+														{#if getKeyPoints(child.id).length > 0}
+															<ul class="key-points">
+																{#each getKeyPoints(child.id) as point}
+																	<li>{point}</li>
+																{/each}
+															</ul>
+														{/if}
+													</div>
+												{/if}
+
+												<!-- Action items for child -->
+												{#if getActionItemsForAgenda(child.id).length > 0}
+													<div class="action-items-inline">
+														<h5 class="block-label">실행 항목</h5>
+														{#each getActionItemsForAgenda(child.id) as item}
+															<div class="action-item-mini">
+																<CheckCircle2 class="w-4 h-4 text-blue-500" />
+																<span>{item.title}</span>
+																{#if item.assignee}
+																	<span class="assignee">({item.assignee})</span>
+																{/if}
+															</div>
+														{/each}
+													</div>
+												{/if}
+											</div>
+										{/each}
+									{:else}
+										<!-- No children - show parent agenda content -->
+										{#if getDiscussion(agenda.id)}
 											<div class="discussion-block">
 												<h5 class="block-label">토론 내용</h5>
-												<p>{getDiscussion(child.id)}</p>
-												{#if getKeyPoints(child.id).length > 0}
+												<p>{getDiscussion(agenda.id)}</p>
+												{#if getKeyPoints(agenda.id).length > 0}
 													<ul class="key-points">
-														{#each getKeyPoints(child.id) as point}
+														{#each getKeyPoints(agenda.id) as point}
 															<li>{point}</li>
 														{/each}
 													</ul>
@@ -268,145 +282,118 @@
 											</div>
 										{/if}
 
-										<!-- Notes for child -->
-										{#if getNotesForAgenda(child.id).length > 0}
-											<div class="notes-block">
-												<h5 class="block-label">메모</h5>
-												{#each getNotesForAgenda(child.id) as note}
-													<p class="note-content">{note.content}</p>
+										<!-- Action items for parent -->
+										{#if getActionItemsForAgenda(agenda.id).length > 0}
+											<div class="action-items-inline">
+												<h5 class="block-label">실행 항목</h5>
+												{#each getActionItemsForAgenda(agenda.id) as item}
+													<div class="action-item-mini">
+														<CheckCircle2 class="w-4 h-4 text-blue-500" />
+														<span>{item.title}</span>
+														{#if item.assignee}
+															<span class="assignee">({item.assignee})</span>
+														{/if}
+													</div>
 												{/each}
 											</div>
 										{/if}
+									{/if}
+								</div>
 
-										<!-- Sketches for child -->
-										{#if getSketchesForAgenda(child.id).length > 0}
-											<div class="sketches-block no-print">
-												<button
-													type="button"
-													class="sketch-button"
-													onclick={() => openSketchModal(child.id)}
-												>
-													<Image class="w-4 h-4" />
-													필기 보기 ({getSketchesForAgenda(child.id).length}개)
-												</button>
-											</div>
-										{/if}
-									</div>
-								{/each}
-							{:else}
-								<!-- No children - show parent agenda content -->
-								{#if getDiscussion(agenda.id)}
-									<div class="discussion-block">
-										<h5 class="block-label">토론 내용</h5>
-										<p>{getDiscussion(agenda.id)}</p>
-										{#if getKeyPoints(agenda.id).length > 0}
-											<ul class="key-points">
-												{#each getKeyPoints(agenda.id) as point}
-													<li>{point}</li>
-												{/each}
-											</ul>
-										{/if}
-									</div>
-								{/if}
-
-								<!-- Notes for parent agenda -->
-								{#if getNotesForAgenda(agenda.id).length > 0}
-									<div class="notes-block">
-										<h5 class="block-label">메모</h5>
-										{#each getNotesForAgenda(agenda.id) as note}
-											<p class="note-content">{note.content}</p>
+								<!-- Right Column: Notes & Sketches -->
+								<div class="content-right">
+									<!-- Notes as PostIts -->
+									{#if agenda.children && agenda.children.length > 0}
+										{#each agenda.children as child, childIdx}
+											{#if getNotesForAgenda(child.id).length > 0}
+												<div class="notes-section">
+													<div class="notes-label">{child.title} 메모</div>
+													<div class="postit-grid">
+														{#each getNotesForAgenda(child.id) as note}
+															<PostItNote
+																content={note.content}
+																color={getPostItColor(childIdx)}
+																small={true}
+															/>
+														{/each}
+													</div>
+												</div>
+											{/if}
 										{/each}
-									</div>
-								{/if}
-
-								<!-- Sketches for parent agenda -->
-								{#if getSketchesForAgenda(agenda.id).length > 0}
-									<div class="sketches-block no-print">
-										<button
-											type="button"
-											class="sketch-button"
-											onclick={() => openSketchModal(agenda.id)}
-										>
-											<Image class="w-4 h-4" />
-											필기 보기 ({getSketchesForAgenda(agenda.id).length}개)
-										</button>
-									</div>
-								{/if}
-							{/if}
+									{:else}
+										<!-- Notes for parent agenda -->
+										{#if getNotesForAgenda(agenda.id).length > 0}
+											<div class="notes-section">
+												<div class="notes-label">메모</div>
+												<div class="postit-grid">
+													{#each getNotesForAgenda(agenda.id) as note}
+														<PostItNote
+															content={note.content}
+															color={getPostItColor(idx)}
+															small={true}
+														/>
+													{/each}
+												</div>
+											</div>
+										{/if}
+									{/if}
+								</div>
+							</div>
 						</div>
 					{/each}
 				</section>
 			{/if}
 
-			<!-- Action Items Section -->
+			<!-- Action Items Summary -->
 			{#if $resultsStore.actionItems.length > 0}
-				<section class="report-section">
-					<h2 class="section-title">실행 항목</h2>
-					<div class="action-items-list">
-						{#each $resultsStore.actionItems as item, idx}
-							<div class="action-item">
-								<span class="action-checkbox">☐</span>
-								<span class="action-content">{item.content}</span>
-								{#if item.assignee_name}
-									<span class="action-assignee">- {item.assignee_name}</span>
-								{/if}
-								{#if item.due_date}
-									<span class="action-due">(마감: {new Date(item.due_date).toLocaleDateString('ko-KR')})</span>
-								{/if}
-							</div>
-						{/each}
+				<section class="report-section action-items-section">
+					<h2 class="section-title">
+						<CheckCircle2 class="w-5 h-5" />
+						실행 항목 요약
+					</h2>
+					<div class="action-items-table">
+						<table>
+							<thead>
+								<tr>
+									<th>항목</th>
+									<th>담당자</th>
+									<th>기한</th>
+									<th>우선순위</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each $resultsStore.actionItems as item}
+									<tr>
+										<td>{item.title}</td>
+										<td>{item.assignee || '-'}</td>
+										<td>{item.due_date ? new Date(item.due_date).toLocaleDateString('ko-KR') : '-'}</td>
+										<td>
+											<span class="priority priority-{item.priority}">
+												{item.priority === 'high' ? '높음' : item.priority === 'medium' ? '중간' : '낮음'}
+											</span>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
 					</div>
 				</section>
 			{/if}
 
 			<!-- Footer -->
 			<footer class="report-footer">
-				<p>MAX Meeting으로 생성됨 - {new Date().toLocaleDateString('ko-KR')}</p>
+				<p>MAX Meeting으로 생성됨 | {new Date().toLocaleDateString('ko-KR')}</p>
 			</footer>
 		</main>
 	{/if}
 </div>
-
-<!-- Sketch Modal -->
-{#if showSketchModal && selectedSketchAgendaId}
-	<div class="modal-overlay" onclick={closeSketchModal} role="presentation">
-		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-			<header class="modal-header">
-				<h3>필기 내용 - {getAgendaTitle(selectedSketchAgendaId)}</h3>
-				<button type="button" class="modal-close" onclick={closeSketchModal}>×</button>
-			</header>
-			<div class="modal-body">
-				{#if selectedSketchAgendaId && getSketchesForAgenda(selectedSketchAgendaId).length === 0}
-					<p class="empty-sketches">필기 내용이 없습니다.</p>
-				{:else if selectedSketchAgendaId}
-					<div class="sketch-gallery">
-						{#each getSketchesForAgenda(selectedSketchAgendaId) as sketch, idx}
-							<div class="sketch-item">
-								<span class="sketch-number">{idx + 1}</span>
-								{#if sketch.snapshot_url}
-									<img src={sketch.snapshot_url} alt="필기 {idx + 1}" class="sketch-image" />
-								{:else if sketch.thumbnail_url}
-									<img src={sketch.thumbnail_url} alt="필기 {idx + 1}" class="sketch-image" />
-								{:else}
-									<div class="sketch-placeholder">
-										<FileText class="w-8 h-8" />
-										<span>미리보기 없음</span>
-									</div>
-								{/if}
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		</div>
-	</div>
-{/if}
 
 <style>
 	.report-page {
 		display: flex;
 		flex-direction: column;
 		min-height: 100vh;
+		background: #f3f4f6;
 	}
 
 	.loading-container,
@@ -425,7 +412,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 1rem;
+		padding: 1rem 2rem;
 		background: white;
 		border-bottom: 1px solid #e5e7eb;
 	}
@@ -441,32 +428,34 @@
 		gap: 0.5rem;
 	}
 
-	/* Main Report */
+	/* Main Report - WIDER! */
 	.meeting-report {
-		max-width: 800px;
-		margin: 0 auto;
-		padding: 2rem;
+		max-width: 1100px;
+		margin: 2rem auto;
+		padding: 3rem;
 		background: white;
+		box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+		border-radius: 0.5rem;
 	}
 
 	/* Report Header */
 	.report-header {
-		border-bottom: 2px solid #1d4ed8;
+		border-bottom: 3px solid #1d4ed8;
 		padding-bottom: 1.5rem;
 		margin-bottom: 2rem;
 	}
 
 	.report-title {
-		font-size: 1.75rem;
+		font-size: 2rem;
 		font-weight: 700;
 		color: #111827;
 		margin: 0 0 1rem 0;
 	}
 
 	.report-meta {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 0.75rem;
 	}
 
 	.meta-item {
@@ -486,16 +475,19 @@
 
 	/* Sections */
 	.report-section {
-		margin-bottom: 2rem;
+		margin-bottom: 2.5rem;
 	}
 
 	.section-title {
-		font-size: 1.25rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 1.375rem;
 		font-weight: 600;
 		color: #111827;
-		margin: 0 0 1rem 0;
-		padding-bottom: 0.5rem;
-		border-bottom: 1px solid #e5e7eb;
+		margin: 0 0 1.25rem 0;
+		padding-bottom: 0.75rem;
+		border-bottom: 2px solid #e5e7eb;
 	}
 
 	.section-content {
@@ -505,14 +497,19 @@
 
 	.summary-content {
 		white-space: pre-wrap;
+		background: #f9fafb;
+		padding: 1.5rem;
+		border-radius: 0.5rem;
+		border-left: 4px solid #3b82f6;
 	}
 
 	/* Agenda Blocks */
 	.agenda-block {
-		margin-bottom: 1.5rem;
-		padding: 1rem;
-		background: #f9fafb;
-		border-radius: 0.5rem;
+		margin-bottom: 2rem;
+		padding: 1.5rem;
+		background: #fafafa;
+		border-radius: 0.75rem;
+		border: 1px solid #e5e7eb;
 		page-break-inside: avoid;
 	}
 
@@ -520,57 +517,80 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		font-size: 1.125rem;
+		font-size: 1.25rem;
 		font-weight: 600;
 		color: #111827;
-		margin: 0 0 0.75rem 0;
+		margin: 0 0 1rem 0;
 	}
 
 	.agenda-number {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 28px;
-		height: 28px;
+		width: 32px;
+		height: 32px;
 		background: #1d4ed8;
 		color: white;
 		border-radius: 50%;
-		font-size: 0.875rem;
+		font-size: 1rem;
 		font-weight: 700;
+		flex-shrink: 0;
 	}
 
 	.agenda-description {
 		color: #6b7280;
-		font-size: 0.875rem;
-		margin: 0 0 1rem 0;
-		padding-left: 2.5rem;
+		font-size: 0.9375rem;
+		margin: 0 0 1rem 2.75rem;
+	}
+
+	/* 2-Column Grid Layout */
+	.agenda-content-grid {
+		display: grid;
+		grid-template-columns: 1fr 340px;
+		gap: 2rem;
+		margin-top: 1rem;
+	}
+
+	.agenda-content-grid.single-column {
+		grid-template-columns: 1fr;
+	}
+
+	.content-left {
+		min-width: 0;
+	}
+
+	.content-right {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
 	}
 
 	/* Child Agenda Blocks */
 	.child-agenda-block {
-		margin: 1rem 0 1rem 2.5rem;
-		padding: 1rem;
+		margin-bottom: 1.5rem;
+		padding: 1.25rem;
 		background: white;
-		border-left: 3px solid #3b82f6;
-		border-radius: 0 0.375rem 0.375rem 0;
+		border-left: 4px solid #3b82f6;
+		border-radius: 0 0.5rem 0.5rem 0;
+		box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 	}
 
 	.child-title {
-		font-size: 1rem;
+		font-size: 1.0625rem;
 		font-weight: 600;
 		color: #374151;
-		margin: 0 0 0.5rem 0;
+		margin: 0 0 0.75rem 0;
 	}
 
 	.child-description {
 		color: #6b7280;
 		font-size: 0.875rem;
-		margin: 0 0 0.75rem 0;
+		margin: 0 0 1rem 0;
 	}
 
 	/* Discussion Block */
 	.discussion-block {
-		margin: 0.75rem 0;
+		margin: 1rem 0;
 	}
 
 	.block-label {
@@ -578,12 +598,13 @@
 		font-weight: 600;
 		color: #6b7280;
 		text-transform: uppercase;
+		letter-spacing: 0.05em;
 		margin: 0 0 0.5rem 0;
 	}
 
 	.discussion-block p {
 		color: #374151;
-		line-height: 1.625;
+		line-height: 1.7;
 		margin: 0;
 	}
 
@@ -595,201 +616,121 @@
 
 	.key-points li {
 		color: #4b5563;
-		margin-bottom: 0.25rem;
+		margin-bottom: 0.375rem;
+		line-height: 1.5;
 	}
 
-	/* Notes Block */
-	.notes-block {
-		margin: 0.75rem 0;
-		padding: 0.75rem;
-		background: #fef3c7;
-		border-radius: 0.375rem;
+	/* Inline Action Items */
+	.action-items-inline {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px dashed #e5e7eb;
 	}
 
-	.note-content {
-		color: #92400e;
-		margin: 0.25rem 0;
-		white-space: pre-wrap;
-	}
-
-	/* Sketches Block */
-	.sketches-block {
-		margin: 0.75rem 0;
-	}
-
-	.sketch-button {
-		display: inline-flex;
+	.action-item-mini {
+		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.5rem 1rem;
+		padding: 0.375rem 0;
 		font-size: 0.875rem;
-		color: #4b5563;
-		background: white;
-		border: 1px solid #d1d5db;
-		border-radius: 0.375rem;
-		cursor: pointer;
-		transition: all 0.15s;
+		color: #374151;
 	}
 
-	.sketch-button:hover {
-		background: #f3f4f6;
-		border-color: #9ca3af;
+	.action-item-mini .assignee {
+		color: #6b7280;
+		font-size: 0.8125rem;
 	}
 
-	/* Action Items */
-	.action-items-list {
+	/* Notes Section (Right Column) */
+	.notes-section {
+		background: #fffbeb;
+		padding: 1rem;
+		border-radius: 0.5rem;
+	}
+
+	.notes-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: #92400e;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin-bottom: 0.75rem;
+	}
+
+	.postit-grid {
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
 	}
 
-	.action-item {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		padding: 0.75rem;
-		background: #f9fafb;
-		border-radius: 0.375rem;
+	/* Action Items Table */
+	.action-items-section {
+		background: #f0fdf4;
+		padding: 1.5rem;
+		border-radius: 0.75rem;
+		margin-top: 2rem;
 	}
 
-	.action-checkbox {
-		font-size: 1.125rem;
-		color: #9ca3af;
+	.action-items-table {
+		overflow-x: auto;
 	}
 
-	.action-content {
-		flex: 1;
+	.action-items-table table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+
+	.action-items-table th,
+	.action-items-table td {
+		padding: 0.75rem 1rem;
+		text-align: left;
+		border-bottom: 1px solid #d1fae5;
+	}
+
+	.action-items-table th {
+		background: #dcfce7;
+		font-weight: 600;
+		color: #166534;
+		font-size: 0.8125rem;
+		text-transform: uppercase;
+	}
+
+	.action-items-table td {
 		color: #374151;
+		font-size: 0.9375rem;
 	}
 
-	.action-assignee {
-		color: #6b7280;
-		font-size: 0.875rem;
-	}
-
-	.action-due {
-		color: #dc2626;
+	.priority {
+		display: inline-block;
+		padding: 0.25rem 0.625rem;
+		border-radius: 9999px;
 		font-size: 0.75rem;
+		font-weight: 600;
+	}
+
+	.priority-high {
+		background: #fee2e2;
+		color: #991b1b;
+	}
+
+	.priority-medium {
+		background: #fef3c7;
+		color: #92400e;
+	}
+
+	.priority-low {
+		background: #dbeafe;
+		color: #1e40af;
 	}
 
 	/* Footer */
 	.report-footer {
 		margin-top: 3rem;
-		padding-top: 1rem;
+		padding-top: 1.5rem;
 		border-top: 1px solid #e5e7eb;
 		text-align: center;
-		font-size: 0.75rem;
 		color: #9ca3af;
-	}
-
-	/* Modal */
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 50;
-	}
-
-	.modal-content {
-		background: white;
-		border-radius: 0.75rem;
-		width: 90%;
-		max-width: 800px;
-		max-height: 90vh;
-		overflow: hidden;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.modal-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 1rem;
-		border-bottom: 1px solid #e5e7eb;
-	}
-
-	.modal-header h3 {
-		font-size: 1.125rem;
-		font-weight: 600;
-		margin: 0;
-	}
-
-	.modal-close {
-		width: 32px;
-		height: 32px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1.5rem;
-		color: #6b7280;
-		background: transparent;
-		border: none;
-		border-radius: 0.25rem;
-		cursor: pointer;
-	}
-
-	.modal-close:hover {
-		background: #f3f4f6;
-	}
-
-	.modal-body {
-		padding: 1rem;
-		overflow-y: auto;
-	}
-
-	.empty-sketches {
-		text-align: center;
-		color: #6b7280;
-		padding: 2rem;
-	}
-
-	.sketch-gallery {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-		gap: 1rem;
-	}
-
-	.sketch-item {
-		position: relative;
-		border: 1px solid #e5e7eb;
-		border-radius: 0.5rem;
-		overflow: hidden;
-	}
-
-	.sketch-number {
-		position: absolute;
-		top: 0.5rem;
-		left: 0.5rem;
-		width: 24px;
-		height: 24px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgba(0, 0, 0, 0.6);
-		color: white;
-		font-size: 0.75rem;
-		font-weight: 600;
-		border-radius: 50%;
-	}
-
-	.sketch-image {
-		width: 100%;
-		height: auto;
-		display: block;
-	}
-
-	.sketch-placeholder {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		padding: 2rem;
-		color: #9ca3af;
-		gap: 0.5rem;
+		font-size: 0.875rem;
 	}
 
 	/* Print Styles */
@@ -804,13 +745,15 @@
 
 		.meeting-report {
 			max-width: none;
-			padding: 0;
-			font-size: 11pt;
-			line-height: 1.5;
+			margin: 0;
+			padding: 1.5cm;
+			box-shadow: none;
+			border-radius: 0;
 		}
 
-		.report-header {
-			border-bottom-width: 2px;
+		.agenda-content-grid {
+			grid-template-columns: 1fr 280px;
+			gap: 1.5rem;
 		}
 
 		.agenda-block {
@@ -818,18 +761,37 @@
 			break-inside: avoid;
 		}
 
-		.child-agenda-block {
-			page-break-inside: avoid;
-			break-inside: avoid;
+		.action-items-section {
+			page-break-before: auto;
 		}
 
-		.action-item {
-			page-break-inside: avoid;
-			break-inside: avoid;
+		/* Force colors on print */
+		.agenda-number {
+			-webkit-print-color-adjust: exact;
+			print-color-adjust: exact;
 		}
 
-		.report-section {
-			page-break-inside: avoid;
+		.notes-section,
+		.action-items-section {
+			-webkit-print-color-adjust: exact;
+			print-color-adjust: exact;
+		}
+
+		.priority {
+			-webkit-print-color-adjust: exact;
+			print-color-adjust: exact;
+		}
+	}
+
+	/* Responsive */
+	@media (max-width: 900px) {
+		.agenda-content-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.content-right {
+			border-top: 1px dashed #e5e7eb;
+			padding-top: 1rem;
 		}
 	}
 </style>
