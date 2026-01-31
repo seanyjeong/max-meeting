@@ -2,10 +2,11 @@
  * App version configuration
  * Update this when deploying new versions
  */
-export const APP_VERSION = '1.15.0';
+export const APP_VERSION = '1.16.0';
 export const BUILD_DATE = '2026-01-31';
 
 // Version history (for reference)
+// 1.16.0 - 헤더에 새 로고 적용 (Gemini 나노바나나)
 // 1.15.0 - 인쇄용 회의록 개선: 2단 레이아웃, 포스트잇 메모 표시
 // 1.14.0 - 새 로고 및 PWA 아이콘 업데이트 (Kimi AI 디자인)
 // 1.0.0 - Initial release

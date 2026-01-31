@@ -46,9 +46,10 @@
 				<div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div class="flex justify-between h-16">
 						<div class="flex items-center">
-							<a href="/" class="flex items-baseline gap-2">
+							<a href="/" class="flex items-center gap-2">
+								<img src="/maxmeeting-final.png" alt="" class="h-10 w-auto" />
 								<span class="text-xl font-bold text-primary-600">MAX Meeting</span>
-								<span class="text-xs text-gray-400 font-normal">v{APP_VERSION}</span>
+								<span class="text-xs text-gray-400 font-normal self-end mb-0.5">v{APP_VERSION}</span>
 							</a>
 							<div class="hidden md:ml-10 md:flex md:space-x-8">
 								<a
