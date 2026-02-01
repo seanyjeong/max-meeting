@@ -29,6 +29,13 @@
 	let newTypeQuestionPerspective = $state('');
 	let isCreatingType = $state(false);
 
+	// Edit meeting type modal state
+	let showEditTypeModal = $state(false);
+	let editingType = $state<MeetingType | null>(null);
+	let editTypeName = $state('');
+	let editTypeQuestionPerspective = $state('');
+	let isUpdatingType = $state(false);
+
 	// Attendee autocomplete state
 	let searchQuery = $state('');
 	let contactSuggestions = $state<Contact[]>([]);
@@ -462,6 +469,58 @@
 		error = '';
 	}
 
+	function openEditTypeModal() {
+		const type = meetingTypes.find(t => t.id === typeId);
+		if (!type) return;
+
+		editingType = type;
+		editTypeName = type.name;
+		editTypeQuestionPerspective = type.question_perspective || '';
+		showEditTypeModal = true;
+		error = '';
+	}
+
+	async function updateMeetingType() {
+		if (!editingType) return;
+		if (!editTypeName.trim()) {
+			error = '회의 유형 이름을 입력해주세요';
+			return;
+		}
+
+		isUpdatingType = true;
+		error = '';
+
+		try {
+			const response = await api.patch<MeetingType>(`/meeting-types/${editingType.id}`, {
+				name: editTypeName.trim(),
+				question_perspective: editTypeQuestionPerspective.trim() || null
+			});
+
+			const updatedType = response as MeetingType;
+			meetingTypes = meetingTypes.map(t =>
+				t.id === updatedType.id ? updatedType : t
+			).sort((a, b) => a.name.localeCompare(b.name));
+
+			closeEditTypeModal();
+		} catch (err: any) {
+			if (err.response?.status === 409) {
+				error = `'${editTypeName}' 유형이 이미 존재합니다`;
+			} else {
+				error = '회의 유형 수정에 실패했습니다';
+			}
+		} finally {
+			isUpdatingType = false;
+		}
+	}
+
+	function closeEditTypeModal() {
+		showEditTypeModal = false;
+		editingType = null;
+		editTypeName = '';
+		editTypeQuestionPerspective = '';
+		error = '';
+	}
+
 	// Attendee autocomplete functions
 	async function searchContacts(event: Event) {
 		const input = event.target as HTMLInputElement;
@@ -656,6 +715,16 @@
 									<option value={type.id}>{type.name}</option>
 								{/each}
 							</select>
+							{#if typeId}
+								<button
+									type="button"
+									onclick={openEditTypeModal}
+									class="btn btn-secondary whitespace-nowrap"
+									title="유형 편집"
+								>
+									편집
+								</button>
+							{/if}
 							<button
 								type="button"
 								onclick={() => { showNewTypeModal = true; }}
@@ -1089,6 +1158,74 @@
 						생성 중...
 					{:else}
 						추가
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Edit Meeting Type Modal -->
+{#if showEditTypeModal && editingType}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+		<div class="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4">
+			<h3 class="text-lg font-semibold text-gray-900 mb-4">회의 유형 편집: {editingType.name}</h3>
+
+			<div class="mb-4">
+				<label for="editTypeName" class="block text-sm font-medium text-gray-700 mb-1">
+					유형 이름 <span class="text-red-500">*</span>
+				</label>
+				<input
+					id="editTypeName"
+					type="text"
+					bind:value={editTypeName}
+					placeholder="예: 북부, 전국, 일산"
+					class="input"
+					maxlength="50"
+				/>
+			</div>
+
+			<div class="mb-4">
+				<label for="editTypeQuestionPerspective" class="block text-sm font-medium text-gray-700 mb-1">
+					질문 생성 관점 <span class="text-gray-400 text-xs font-normal">(선택)</span>
+				</label>
+				<textarea
+					id="editTypeQuestionPerspective"
+					bind:value={editTypeQuestionPerspective}
+					placeholder="예: 각 지점 원장 입장에서 이 안건이 우리 지점에 어떤 이익이 되는지, 비용 대비 효과는 무엇인지 관점으로 질문"
+					class="input min-h-[120px] resize-y"
+					rows="4"
+				></textarea>
+				<p class="mt-1 text-xs text-gray-500">
+					이 회의 유형에서 안건 생성 시 AI가 어떤 관점에서 질문을 생성할지 지정합니다.
+				</p>
+			</div>
+
+			{#if error}
+				<div class="rounded-md bg-red-50 p-3 mb-4">
+					<p class="text-sm text-red-800">{error}</p>
+				</div>
+			{/if}
+
+			<div class="flex justify-end space-x-3">
+				<button
+					type="button"
+					onclick={closeEditTypeModal}
+					disabled={isUpdatingType}
+					class="btn btn-secondary disabled:opacity-50"
+				>
+					취소
+				</button>
+				<button
+					type="button"
+					onclick={updateMeetingType}
+					disabled={isUpdatingType || !editTypeName.trim()}
+					class="btn btn-primary disabled:opacity-50"
+				>
+					{#if isUpdatingType}
+						저장 중...
+					{:else}
+						저장
 					{/if}
 				</button>
 			</div>
