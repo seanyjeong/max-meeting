@@ -123,10 +123,11 @@ async def update_meeting_type(
             )
         meeting_type.name = data.name
 
-    if data.description is not None:
+    # Use model_fields_set to distinguish between "not provided" and "explicitly set to null"
+    if "description" in data.model_fields_set:
         meeting_type.description = data.description
 
-    if data.question_perspective is not None:
+    if "question_perspective" in data.model_fields_set:
         meeting_type.question_perspective = data.question_perspective
 
     await db.commit()
