@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.meeting import MeetingType
 from app.schemas.meeting_type import (
     MeetingTypeCreate,
+    MeetingTypeUpdate,
     MeetingTypeResponse,
     MeetingTypeListResponse,
 )
@@ -67,8 +68,67 @@ async def create_meeting_type(
             detail=f"Meeting type '{data.name}' already exists",
         )
 
-    meeting_type = MeetingType(name=data.name)
+    meeting_type = MeetingType(
+        name=data.name,
+        description=data.description,
+        question_perspective=data.question_perspective,
+    )
     db.add(meeting_type)
+    await db.commit()
+    await db.refresh(meeting_type)
+
+    return MeetingTypeResponse.model_validate(meeting_type)
+
+
+@router.patch("/{type_id}", response_model=MeetingTypeResponse)
+async def update_meeting_type(
+    type_id: int,
+    data: MeetingTypeUpdate,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Update a meeting type.
+
+    - **name**: Optional new name for the meeting type
+    - **description**: Optional description
+    - **question_perspective**: Optional perspective for question generation
+    """
+    stmt = select(MeetingType).where(
+        MeetingType.id == type_id,
+        MeetingType.deleted_at.is_(None),
+    )
+    result = await db.execute(stmt)
+    meeting_type = result.scalar_one_or_none()
+
+    if not meeting_type:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting type not found",
+        )
+
+    # Check for duplicate name if name is being changed
+    if data.name is not None and data.name != meeting_type.name:
+        stmt = select(MeetingType).where(
+            MeetingType.name == data.name,
+            MeetingType.deleted_at.is_(None),
+            MeetingType.id != type_id,
+        )
+        result = await db.execute(stmt)
+        existing = result.scalar_one_or_none()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Meeting type '{data.name}' already exists",
+            )
+        meeting_type.name = data.name
+
+    if data.description is not None:
+        meeting_type.description = data.description
+
+    if data.question_perspective is not None:
+        meeting_type.question_perspective = data.question_perspective
+
     await db.commit()
     await db.refresh(meeting_type)
 

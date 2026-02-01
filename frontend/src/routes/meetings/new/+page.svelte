@@ -8,6 +8,8 @@
 	interface MeetingType {
 		id: number;
 		name: string;
+		description?: string | null;
+		question_perspective?: string | null;
 	}
 
 	interface Contact {
@@ -24,6 +26,7 @@
 	let error = $state('');
 	let showNewTypeModal = $state(false);
 	let newTypeName = $state('');
+	let newTypeQuestionPerspective = $state('');
 	let isCreatingType = $state(false);
 
 	// Attendee autocomplete state
@@ -429,7 +432,8 @@
 
 		try {
 			const response = await api.post<MeetingType>('/meeting-types', {
-				name: newTypeName.trim()
+				name: newTypeName.trim(),
+				question_perspective: newTypeQuestionPerspective.trim() || null
 			});
 
 			// 응답이 직접 객체로 옴 (data로 감싸지지 않음)
@@ -438,6 +442,7 @@
 			typeId = newType.id;
 			showNewTypeModal = false;
 			newTypeName = '';
+			newTypeQuestionPerspective = '';
 		} catch (err: any) {
 			if (import.meta.env.DEV) console.error('Failed to create meeting type:', err);
 			if (err.response?.status === 409) {
@@ -453,6 +458,7 @@
 	function closeNewTypeModal() {
 		showNewTypeModal = false;
 		newTypeName = '';
+		newTypeQuestionPerspective = '';
 		error = '';
 	}
 
@@ -598,20 +604,6 @@
 				</div>
 			</div>
 		</div>
-	{/if}
-
-	<!-- Debug Panel (collapsible) -->
-	{#if debugLogs.length > 0}
-		<details class="mb-4 bg-gray-800 text-green-400 rounded-lg overflow-hidden text-xs">
-			<summary class="px-3 py-2 cursor-pointer hover:bg-gray-700">
-				🐛 Debug ({debugLogs.length} logs) - 회의유형: {meetingTypes.length}개
-			</summary>
-			<div class="px-3 py-2 max-h-40 overflow-y-auto font-mono">
-				{#each debugLogs as logLine}
-					<div class="py-0.5">{logLine}</div>
-				{/each}
-			</div>
-		</details>
 	{/if}
 
 	<div class="mb-6">
@@ -1054,6 +1046,22 @@
 						}
 					}}
 				/>
+			</div>
+
+			<div class="mb-4">
+				<label for="newTypeQuestionPerspective" class="block text-sm font-medium text-gray-700 mb-1">
+					질문 생성 관점 <span class="text-gray-400 text-xs font-normal">(선택)</span>
+				</label>
+				<textarea
+					id="newTypeQuestionPerspective"
+					bind:value={newTypeQuestionPerspective}
+					placeholder="예: 각 지점 원장 입장에서 이 안건이 우리 지점에 어떤 이익이 되는지, 비용 대비 효과는 무엇인지 관점으로 질문"
+					class="input min-h-[80px] resize-y"
+					rows="3"
+				></textarea>
+				<p class="mt-1 text-xs text-gray-500">
+					안건에 대한 질문 생성 시 어떤 관점에서 질문할지 지정합니다.
+				</p>
 			</div>
 
 			{#if error}

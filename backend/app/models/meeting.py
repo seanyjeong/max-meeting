@@ -35,6 +35,7 @@ class MeetingType(Base, TimestampMixin, SoftDeleteMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     agenda_template: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     default_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    question_perspective: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     meetings: Mapped[list["Meeting"]] = relationship(

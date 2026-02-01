@@ -6,6 +6,8 @@ import { writable } from 'svelte/store';
 export interface MeetingType {
 	id: number;
 	name: string;
+	description?: string | null;
+	question_perspective?: string | null;
 }
 
 export interface Meeting {

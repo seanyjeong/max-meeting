@@ -6,7 +6,7 @@
 
 | 구분 | 값 |
 |------|-----|
-| **Version** | v1.16.6 (2026-01-31) |
+| **Version** | v1.16.7 (2026-02-01) |
 | **Backend** | FastAPI @ `localhost:9000` |
 | **Frontend** | SvelteKit @ Vercel (`max-meeting.vercel.app`) |
 | **DB** | PostgreSQL @ `localhost:5432/maxmeeting` |
@@ -82,19 +82,19 @@ PGPASSWORD=password psql -h localhost -U maxmeeting -d maxmeeting
 
 ---
 
-## 최근 변경사항 (v1.16.6)
+## 최근 변경사항 (v1.16.7)
+
+| 변경 | 설명 |
+|------|------|
+| 질문 관점 커스터마이징 | 회의 유형별 question_perspective 설정으로 맞춤형 질문 생성 |
+
+## 이전 변경사항 (v1.16.0 ~ v1.16.6)
 
 | 변경 | 설명 |
 |------|------|
 | STT 타임스탬프 수정 | LLM refine 비활성화로 긴 녹음 누락 문제 해결 |
 | 녹음 파일 자동 정리 | 회의록 생성 3일 후 자동 삭제 (Celery Beat) |
 | 디버그 코드 정리 | 프론트엔드 console.log 50+ 개 제거 |
-| STT 에러 처리 | 에러 시 recording.status = FAILED 설정 |
-
-## 이전 변경사항 (v1.16.0 ~ v1.16.5)
-
-| 변경 | 설명 |
-|------|------|
 | 새 로고 | 헤더에 Gemini 나노바나나 로고 적용 |
 | 인쇄용 회의록 | 2단 레이아웃, 포스트잇 메모 표시 |
 | 녹음 리사이즈 | 패널 드래그 리사이즈 지원 |

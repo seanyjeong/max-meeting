@@ -318,6 +318,7 @@ Output format:
         agenda_description: str | None = None,
         context: str | None = None,
         num_questions: int = 4,
+        question_perspective: str | None = None,
     ) -> list[str]:
         """
         Generate discussion questions for an agenda item.
@@ -327,6 +328,7 @@ Output format:
             agenda_description: Optional description of the agenda
             context: Optional additional context
             num_questions: Number of questions to generate (default: 4)
+            question_perspective: Optional perspective to guide question generation
 
         Returns:
             List of question strings
@@ -339,10 +341,17 @@ Output format:
 
         description_text = f"\nDescription: {agenda_description}" if agenda_description else ""
         context_text = f"\nAdditional Context: {context}" if context else ""
+        perspective_text = ""
+        if question_perspective:
+            perspective_text = f"""
+
+회의 관점: {question_perspective}
+이 관점을 반영하여 참석자들이 실질적으로 고려해야 할 질문을 생성하세요.
+"""
 
         prompt = f"""Generate {num_questions} discussion questions for the following agenda item.
 
-Agenda Title: {agenda_title}{description_text}{context_text}
+Agenda Title: {agenda_title}{description_text}{context_text}{perspective_text}
 
 Requirements:
 1. Questions must be specific and actionable
@@ -769,6 +778,7 @@ async def generate_questions(
     agenda_description: str | None = None,
     context: str | None = None,
     num_questions: int = 4,
+    question_perspective: str | None = None,
 ) -> list[str]:
     """Convenience function to generate questions."""
     service = get_llm_service()
@@ -777,6 +787,7 @@ async def generate_questions(
         agenda_description=agenda_description,
         context=context,
         num_questions=num_questions,
+        question_perspective=question_perspective,
     )
 
 

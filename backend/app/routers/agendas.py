@@ -6,9 +6,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import AgendaQuestion
+from app.models import AgendaQuestion, Meeting
 from app.schemas.agenda import (
     AgendaCreate,
     AgendaListResponse,
@@ -93,12 +96,24 @@ async def create_agenda(
     try:
         agenda = await service.create_agenda(meeting_id, data)
 
+        # Get meeting's question_perspective from meeting_type
+        result = await db.execute(
+            select(Meeting)
+            .options(selectinload(Meeting.meeting_type))
+            .where(Meeting.id == meeting_id)
+        )
+        meeting = result.scalar_one_or_none()
+        question_perspective = None
+        if meeting and meeting.meeting_type:
+            question_perspective = meeting.meeting_type.question_perspective
+
         # Auto-generate questions using Gemini
         try:
             questions_text = await generate_questions(
                 agenda_title=agenda.title,
                 agenda_description=agenda.description,
                 num_questions=4,
+                question_perspective=question_perspective,
             )
 
             for i, q in enumerate(questions_text):
@@ -145,6 +160,17 @@ async def parse_agenda_text(
     agenda_service = AgendaService(db)
     llm_service = get_llm_service()
 
+    # Get meeting's question_perspective from meeting_type
+    result = await db.execute(
+        select(Meeting)
+        .options(selectinload(Meeting.meeting_type))
+        .where(Meeting.id == meeting_id)
+    )
+    meeting = result.scalar_one_or_none()
+    question_perspective = None
+    if meeting and meeting.meeting_type:
+        question_perspective = meeting.meeting_type.question_perspective
+
     async def generate_questions_for_agenda(agenda_id: int, title: str, description: str | None):
         """Generate questions for an agenda item."""
         try:
@@ -152,6 +178,7 @@ async def parse_agenda_text(
                 agenda_title=title,
                 agenda_description=description,
                 num_questions=4,
+                question_perspective=question_perspective,
             )
 
             for i, q in enumerate(questions_text):

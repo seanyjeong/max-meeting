@@ -14,8 +14,30 @@ class MeetingTypeResponse(BaseModel):
 
     id: int
     name: str
+    description: Optional[str] = None
+    question_perspective: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MeetingTypeCreate(BaseModel):
+    """Schema for creating a meeting type."""
+
+    name: str = Field(..., min_length=1, max_length=50, description="Meeting type name")
+    description: Optional[str] = Field(None, description="Description of the meeting type")
+    question_perspective: Optional[str] = Field(
+        None, description="Perspective for generating discussion questions"
+    )
+
+
+class MeetingTypeUpdate(BaseModel):
+    """Schema for updating a meeting type."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=50, description="Meeting type name")
+    description: Optional[str] = Field(None, description="Description of the meeting type")
+    question_perspective: Optional[str] = Field(
+        None, description="Perspective for generating discussion questions"
+    )
 
 
 class AttendeeBase(BaseModel):

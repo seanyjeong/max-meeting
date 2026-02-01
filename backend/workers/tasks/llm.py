@@ -497,15 +497,16 @@ def generate_questions(
     async def _generate():
         from sqlalchemy import select
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from sqlalchemy.orm import selectinload
 
-        from app.models import Agenda, AgendaQuestion
+        from app.models import Agenda, AgendaQuestion, Meeting
         from app.services.llm import get_llm_service
 
         engine = create_async_engine(settings.ASYNC_DATABASE_URL)
         async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
         async with async_session() as session:
-            # Get agenda
+            # Get agenda with meeting and meeting_type
             result = await session.execute(
                 select(Agenda).where(Agenda.id == agenda_id)
             )
@@ -514,12 +515,25 @@ def generate_questions(
             if not agenda:
                 raise ValueError(f"Agenda {agenda_id} not found")
 
+            # Get question_perspective from meeting_type
+            question_perspective = None
+            if agenda.meeting_id:
+                meeting_result = await session.execute(
+                    select(Meeting)
+                    .options(selectinload(Meeting.meeting_type))
+                    .where(Meeting.id == agenda.meeting_id)
+                )
+                meeting = meeting_result.scalar_one_or_none()
+                if meeting and meeting.meeting_type:
+                    question_perspective = meeting.meeting_type.question_perspective
+
             # Generate questions using LLM
             llm_service = get_llm_service()
             questions = await llm_service.generate_questions(
                 agenda_title=agenda.title,
                 agenda_description=agenda.description,
                 num_questions=num_questions,
+                question_perspective=question_perspective,
             )
 
             # Delete existing generated questions
