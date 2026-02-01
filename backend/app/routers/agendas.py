@@ -1,6 +1,7 @@
 """Agenda API endpoints."""
 
 import logging
+import random
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -112,7 +113,7 @@ async def create_agenda(
             questions_text = await generate_questions(
                 agenda_title=agenda.title,
                 agenda_description=agenda.description,
-                num_questions=4,
+                num_questions=random.randint(1, 4),
                 question_perspective=question_perspective,
             )
 
@@ -177,7 +178,7 @@ async def parse_agenda_text(
             questions_text = await generate_questions(
                 agenda_title=title,
                 agenda_description=description,
-                num_questions=4,
+                num_questions=random.randint(1, 4),
                 question_perspective=question_perspective,
             )
 
@@ -474,6 +475,91 @@ async def add_question(
         return QuestionResponse.model_validate(question)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post(
+    "/agendas/{agenda_id}/questions/regenerate",
+    response_model=list[QuestionResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def regenerate_questions(
+    agenda_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """
+    Regenerate AI questions for an agenda.
+
+    Deletes existing generated questions and creates new ones.
+    Manual questions (is_generated=False) are preserved.
+    """
+    from app.models import Agenda
+
+    # Get agenda
+    result = await db.execute(
+        select(Agenda).where(Agenda.id == agenda_id)
+    )
+    agenda = result.scalar_one_or_none()
+
+    if not agenda:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agenda not found"
+        )
+
+    # Get meeting's question_perspective
+    question_perspective = None
+    if agenda.meeting_id:
+        meeting_result = await db.execute(
+            select(Meeting)
+            .options(selectinload(Meeting.meeting_type))
+            .where(Meeting.id == agenda.meeting_id)
+        )
+        meeting = meeting_result.scalar_one_or_none()
+        if meeting and meeting.meeting_type:
+            question_perspective = meeting.meeting_type.question_perspective
+
+    # Delete existing generated questions
+    existing = await db.execute(
+        select(AgendaQuestion)
+        .where(AgendaQuestion.agenda_id == agenda_id)
+        .where(AgendaQuestion.is_generated == True)  # noqa: E712
+    )
+    for q in existing.scalars().all():
+        await db.delete(q)
+
+    # Generate new questions (1-4 random)
+    try:
+        questions_text = await generate_questions(
+            agenda_title=agenda.title,
+            agenda_description=agenda.description,
+            num_questions=random.randint(1, 4),
+            question_perspective=question_perspective,
+        )
+
+        new_questions = []
+        for i, q_text in enumerate(questions_text):
+            question = AgendaQuestion(
+                agenda_id=agenda_id,
+                question=q_text,
+                order_num=i,
+                is_generated=True,
+                answered=False,
+            )
+            db.add(question)
+            await db.flush()
+            new_questions.append(question)
+
+        await db.commit()
+
+        return [QuestionResponse.model_validate(q) for q in new_questions]
+
+    except Exception as e:
+        logger.error(f"Failed to regenerate questions for agenda {agenda_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to regenerate questions"
+        )
 
 
 @router.patch("/questions/{question_id}", response_model=QuestionResponse)

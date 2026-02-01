@@ -9,7 +9,7 @@
 		getCachedMeeting,
 		isOffline
 	} from '$lib/stores/offlineCache';
-	import { Pencil, Trash2, X, Check, Plus } from 'lucide-svelte';
+	import { Pencil, Trash2, X, Check, Plus, RefreshCw } from 'lucide-svelte';
 	import { formatDateTime } from '$lib/utils/format';
 	import { logger } from '$lib/utils/logger';
 
@@ -177,6 +177,20 @@
 			logger.error('Failed to generate questions:', err);
 		} finally {
 			isGeneratingQuestions = false;
+		}
+	}
+
+	let regeneratingAgendaId = $state<number | null>(null);
+
+	async function regenerateQuestions(agendaId: number) {
+		regeneratingAgendaId = agendaId;
+		try {
+			await api.post(`/agendas/${agendaId}/questions/regenerate`);
+			await loadMeeting();
+		} catch (err) {
+			logger.error('Failed to regenerate questions:', err);
+		} finally {
+			regeneratingAgendaId = null;
 		}
 	}
 
@@ -598,12 +612,24 @@
 																	</button>
 																</div>
 															{:else}
-																<button
-																	onclick={() => addingQuestionAgendaId = child.id}
-																	class="mt-2 text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
-																>
-																	<Plus class="w-3 h-3" /> 질문 추가
-																</button>
+																<div class="flex items-center gap-3 mt-2">
+																	<button
+																		onclick={() => addingQuestionAgendaId = child.id}
+																		class="text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
+																	>
+																		<Plus class="w-3 h-3" /> 질문 추가
+																	</button>
+																	{#if child.questions && child.questions.length > 0}
+																		<button
+																			onclick={() => regenerateQuestions(child.id)}
+																			disabled={regeneratingAgendaId === child.id}
+																			class="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
+																		>
+																			<RefreshCw class="w-3 h-3 {regeneratingAgendaId === child.id ? 'animate-spin' : ''}" />
+																			{regeneratingAgendaId === child.id ? '생성 중...' : '질문 재생성'}
+																		</button>
+																	{/if}
+																</div>
 															{/if}
 														</div>
 													{/if}
@@ -681,12 +707,24 @@
 													</button>
 												</div>
 											{:else}
-												<button
-													onclick={() => addingQuestionAgendaId = agenda.id}
-													class="mt-2 text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
-												>
-													<Plus class="w-3 h-3" /> 질문 추가
-												</button>
+												<div class="flex items-center gap-3 mt-2">
+													<button
+														onclick={() => addingQuestionAgendaId = agenda.id}
+														class="text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
+													>
+														<Plus class="w-3 h-3" /> 질문 추가
+													</button>
+													{#if agenda.questions && agenda.questions.length > 0}
+														<button
+															onclick={() => regenerateQuestions(agenda.id)}
+															disabled={regeneratingAgendaId === agenda.id}
+															class="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
+														>
+															<RefreshCw class="w-3 h-3 {regeneratingAgendaId === agenda.id ? 'animate-spin' : ''}" />
+															{regeneratingAgendaId === agenda.id ? '생성 중...' : '질문 재생성'}
+														</button>
+													{/if}
+												</div>
 											{/if}
 										</div>
 									{/if}
