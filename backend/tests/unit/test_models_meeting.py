@@ -18,6 +18,16 @@ class TestMeetingType:
         """MeetingType should have tablename 'meeting_types'."""
         assert MeetingType.__tablename__ == "meeting_types"
 
+    def test_meeting_type_has_question_perspective_field(self):
+        """MeetingType should have question_perspective field."""
+        columns = [c.name for c in MeetingType.__table__.columns]
+        assert "question_perspective" in columns
+
+    def test_meeting_type_question_perspective_is_nullable(self):
+        """question_perspective field should be nullable."""
+        column = MeetingType.__table__.columns["question_perspective"]
+        assert column.nullable is True
+
 
 class TestMeeting:
     """Tests for the Meeting model."""
