@@ -44,6 +44,10 @@
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 	let selectedContacts = $state<Contact[]>([]);
 
+	// Ad-hoc attendee state (attendees without contact)
+	let adHocAttendeeName = $state('');
+	let adHocAttendees = $state<string[]>([]);
+
 	// Form fields
 	let title = $state('');
 	let typeId = $state<number | null>(null);
@@ -399,6 +403,17 @@
 
 			await saveAgendasRecursively(validAgendas);
 
+			// Add ad-hoc attendees (without contact_id)
+			if (adHocAttendees.length > 0) {
+				savingStep = '참석자 추가 중...';
+				for (const name of adHocAttendees) {
+					await api.post(`/meetings/${meetingId}/attendees`, {
+						name: name,
+						attended: false
+					});
+				}
+			}
+
 			savingProgress = 100;
 			savingStep = '완료!';
 
@@ -568,6 +583,21 @@
 	function removeAttendee(contactId: number) {
 		selectedAttendees = selectedAttendees.filter((id) => id !== contactId);
 		selectedContacts = selectedContacts.filter((c) => c.id !== contactId);
+	}
+
+	function addAdHocAttendee() {
+		const name = adHocAttendeeName.trim();
+		if (!name) return;
+		if (adHocAttendees.includes(name)) {
+			adHocAttendeeName = '';
+			return;
+		}
+		adHocAttendees = [...adHocAttendees, name];
+		adHocAttendeeName = '';
+	}
+
+	function removeAdHocAttendee(name: string) {
+		adHocAttendees = adHocAttendees.filter((n) => n !== name);
 	}
 
 	function getContactById(id: number): Contact | undefined {
@@ -769,10 +799,43 @@
 			<section class="card">
 				<h2 class="text-lg font-medium text-gray-900 mb-4">참석자</h2>
 
+				<!-- Direct Name Input (Ad-hoc Attendee) -->
+				<div class="mb-4">
+					<label for="adhoc-attendee" class="block text-sm font-medium text-gray-700 mb-1">
+						직접 입력
+					</label>
+					<div class="flex gap-2">
+						<input
+							id="adhoc-attendee"
+							type="text"
+							bind:value={adHocAttendeeName}
+							placeholder="참석자 이름 입력"
+							class="input flex-1"
+							onkeydown={(e) => {
+								if (e.key === 'Enter') {
+									e.preventDefault();
+									addAdHocAttendee();
+								}
+							}}
+						/>
+						<button
+							type="button"
+							onclick={addAdHocAttendee}
+							disabled={!adHocAttendeeName.trim()}
+							class="btn btn-secondary disabled:opacity-50"
+						>
+							추가
+						</button>
+					</div>
+					<p class="mt-1 text-xs text-gray-500">
+						연락처에 없는 참석자를 직접 추가할 수 있습니다.
+					</p>
+				</div>
+
 				<!-- Search Input with Autocomplete -->
 				<div class="mb-4 relative">
 					<label for="attendee-search" class="block text-sm font-medium text-gray-700 mb-1">
-						참석자 검색
+						연락처에서 검색
 					</label>
 					<input
 						id="attendee-search"
@@ -814,12 +877,13 @@
 				</div>
 
 				<!-- Selected Attendees -->
-				{#if selectedAttendees.length > 0}
+				{#if selectedAttendees.length > 0 || adHocAttendees.length > 0}
 					<div class="mb-4">
 						<div class="block text-sm font-medium text-gray-700 mb-2">
-							선택된 참석자 ({selectedAttendees.length}명)
+							선택된 참석자 ({selectedAttendees.length + adHocAttendees.length}명)
 						</div>
 						<div class="flex flex-wrap gap-2">
+							<!-- Contact-based attendees -->
 							{#each selectedAttendees as attendeeId (attendeeId)}
 								{@const contact = getContactById(attendeeId)}
 								{#if contact}
@@ -837,6 +901,23 @@
 										</button>
 									</span>
 								{/if}
+							{/each}
+							<!-- Ad-hoc attendees (direct name input) -->
+							{#each adHocAttendees as name (name)}
+								<span class="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
+									{name}
+									<span class="text-xs text-gray-500">(직접입력)</span>
+									<button
+										type="button"
+										onclick={() => removeAdHocAttendee(name)}
+										class="ml-1 hover:text-gray-900 focus:outline-none"
+										title="제거"
+									>
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</span>
 							{/each}
 						</div>
 					</div>

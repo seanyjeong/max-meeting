@@ -308,7 +308,9 @@ async def add_attendee(
     """
     Add an attendee to a meeting.
 
+    Either contact_id or name must be provided:
     - **contact_id**: ID of the contact to add as attendee
+    - **name**: Name for ad-hoc attendee (when no contact)
     - **attended**: Whether the contact attended (default: false)
     - **speaker_label**: Label for voice recognition
     """
@@ -342,6 +344,7 @@ async def add_attendee(
         id=attendee.id,
         meeting_id=attendee.meeting_id,
         contact_id=attendee.contact_id,
+        name=attendee.name,
         attended=attendee.attended,
         speaker_label=attendee.speaker_label,
         contact=contact_brief,
@@ -371,6 +374,40 @@ async def remove_attendee(
         )
 
     removed = await service.remove_attendee(meeting_id, contact_id)
+
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attendee not found",
+        )
+
+    return None
+
+
+@router.delete(
+    "/{meeting_id}/attendees/by-id/{attendee_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_attendee_by_id(
+    meeting_id: int,
+    attendee_id: int,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """
+    Remove an attendee from a meeting by attendee ID.
+    Use this for ad-hoc attendees without contact_id.
+    """
+    service = MeetingService(db)
+    meeting = await service.get_by_id(meeting_id)
+
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meeting not found",
+        )
+
+    removed = await service.remove_attendee_by_id(meeting_id, attendee_id)
 
     if not removed:
         raise HTTPException(

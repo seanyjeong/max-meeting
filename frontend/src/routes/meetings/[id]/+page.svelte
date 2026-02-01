@@ -419,9 +419,11 @@
 				<div class="flex flex-wrap gap-2">
 					{#each $currentMeeting.attendees as attendee (attendee.id)}
 						<span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700">
-							{attendee.contact?.name || '(알 수 없음)'}
+							{attendee.contact?.name || attendee.name || '(알 수 없음)'}
 							{#if attendee.contact?.role}
 								<span class="ml-1 text-gray-500">({attendee.contact.role})</span>
+							{:else if !attendee.contact && attendee.name}
+								<span class="ml-1 text-gray-400 text-xs">(직접입력)</span>
 							{/if}
 						</span>
 					{/each}

@@ -151,9 +151,11 @@ class MeetingAttendee(Base, CreatedAtMixin):
     meeting_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False
     )
-    contact_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("contacts.id"), nullable=False
+    contact_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("contacts.id"), nullable=True
     )
+    # For ad-hoc attendees without a contact record
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     attended: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     speaker_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
 

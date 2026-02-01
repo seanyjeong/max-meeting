@@ -43,7 +43,8 @@ class MeetingTypeUpdate(BaseModel):
 class AttendeeBase(BaseModel):
     """Base schema for meeting attendee."""
 
-    contact_id: int = Field(..., description="ID of the contact to add as attendee")
+    contact_id: Optional[int] = Field(None, description="ID of the contact to add as attendee")
+    name: Optional[str] = Field(None, max_length=100, description="Name for ad-hoc attendee (when no contact)")
     attended: bool = Field(default=False, description="Whether the contact attended")
     speaker_label: Optional[str] = Field(
         None,
@@ -53,7 +54,10 @@ class AttendeeBase(BaseModel):
 
 
 class AttendeeCreate(AttendeeBase):
-    """Schema for adding an attendee to a meeting."""
+    """Schema for adding an attendee to a meeting.
+
+    Either contact_id or name must be provided.
+    """
     pass
 
 
@@ -63,6 +67,7 @@ class AttendeeResponse(BaseModel):
     id: int
     meeting_id: int
     contact_id: Optional[int] = None
+    name: Optional[str] = None  # For ad-hoc attendees without contact
     attended: bool
     speaker_label: Optional[str] = None
     contact: Optional["ContactBrief"] = None

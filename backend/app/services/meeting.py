@@ -324,27 +324,33 @@ class MeetingService:
 
         Args:
             meeting_id: The meeting's ID.
-            data: The attendee data.
+            data: The attendee data (either contact_id or name must be provided).
 
         Returns:
             The created attendee.
 
         Raises:
-            ValueError: If the contact is already an attendee.
+            ValueError: If the contact is already an attendee or neither contact_id nor name is provided.
         """
-        # Check if already an attendee
-        existing_query = (
-            select(MeetingAttendee)
-            .where(MeetingAttendee.meeting_id == meeting_id)
-            .where(MeetingAttendee.contact_id == data.contact_id)
-        )
-        existing = await self.db.execute(existing_query)
-        if existing.scalar_one_or_none():
-            raise ValueError("Contact is already an attendee of this meeting")
+        # Validate that either contact_id or name is provided
+        if not data.contact_id and not data.name:
+            raise ValueError("Either contact_id or name must be provided")
+
+        # Check if already an attendee (only for contact-based attendees)
+        if data.contact_id:
+            existing_query = (
+                select(MeetingAttendee)
+                .where(MeetingAttendee.meeting_id == meeting_id)
+                .where(MeetingAttendee.contact_id == data.contact_id)
+            )
+            existing = await self.db.execute(existing_query)
+            if existing.scalar_one_or_none():
+                raise ValueError("Contact is already an attendee of this meeting")
 
         attendee = MeetingAttendee(
             meeting_id=meeting_id,
             contact_id=data.contact_id,
+            name=data.name,
             attended=data.attended,
             speaker_label=data.speaker_label,
         )
@@ -367,7 +373,7 @@ class MeetingService:
         contact_id: int,
     ) -> bool:
         """
-        Remove an attendee from a meeting.
+        Remove an attendee from a meeting by contact_id.
 
         Args:
             meeting_id: The meeting's ID.
@@ -380,6 +386,36 @@ class MeetingService:
             select(MeetingAttendee)
             .where(MeetingAttendee.meeting_id == meeting_id)
             .where(MeetingAttendee.contact_id == contact_id)
+        )
+        result = await self.db.execute(query)
+        attendee = result.scalar_one_or_none()
+
+        if not attendee:
+            return False
+
+        await self.db.delete(attendee)
+        await self.db.flush()
+        return True
+
+    async def remove_attendee_by_id(
+        self,
+        meeting_id: int,
+        attendee_id: int,
+    ) -> bool:
+        """
+        Remove an attendee from a meeting by attendee_id.
+
+        Args:
+            meeting_id: The meeting's ID.
+            attendee_id: The attendee's ID.
+
+        Returns:
+            True if removed, False if not found.
+        """
+        query = (
+            select(MeetingAttendee)
+            .where(MeetingAttendee.meeting_id == meeting_id)
+            .where(MeetingAttendee.id == attendee_id)
         )
         result = await self.db.execute(query)
         attendee = result.scalar_one_or_none()

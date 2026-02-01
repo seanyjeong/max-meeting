@@ -67,6 +67,7 @@ export interface Attendee {
 	id: number;
 	meeting_id: number;
 	contact_id: number | null;
+	name: string | null;  // For ad-hoc attendees without contact
 	attended: boolean | null;
 	speaker_label: string | null;
 	contact: ContactBrief | null;
