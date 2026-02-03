@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import type { Agenda, AgendaQuestion, TimeSegment } from '$lib/stores/meeting';
+	import { getAgendaPermissions, canAddAgenda, type AgendaPermissions } from '$lib/utils/agenda-permissions';
 
 	interface Props {
 		agendas: Agenda[];
@@ -12,6 +13,12 @@
 		onChildAgendaChange?: (prevId: number | null, childId: number, currentTime: number) => void;
 		onQuestionToggle: (questionId: number, answered: boolean) => void;
 		onNoteChange: (agendaId: number, content: string) => void;
+		// 신규 props for CRUD
+		activeAgendaId?: number | null;
+		isPaused?: boolean;
+		onAgendaCreate?: (title: string, parentId?: number) => Promise<void>;
+		onAgendaUpdate?: (id: number, data: { title?: string; description?: string }) => Promise<void>;
+		onAgendaDelete?: (id: number) => Promise<void>;
 	}
 
 	let {
@@ -23,12 +30,29 @@
 		onAgendaChange,
 		onChildAgendaChange,
 		onQuestionToggle,
-		onNoteChange
+		onNoteChange,
+		// 신규 props
+		activeAgendaId = null,
+		isPaused = false,
+		onAgendaCreate,
+		onAgendaUpdate,
+		onAgendaDelete
 	}: Props = $props();
 
 	let noteDebounceTimers = new Map<number, ReturnType<typeof setTimeout>>();
 	let listCollapsed = $state(false);
 	let activeChildId = $state<number | null>(null);
+
+	// 인라인 편집 상태
+	let editingAgendaId = $state<number | null>(null);
+	let editingField = $state<'title' | 'description' | null>(null);
+	let editValue = $state('');
+	let originalEditValue = $state('');
+
+	// 새 안건 추가 UI 상태
+	let showAddForm = $state(false);
+	let newAgendaTitle = $state('');
+	let isAddingAgenda = $state(false);
 
 	// Current agenda
 	let currentAgenda = $derived(agendas[currentAgendaIndex]);
@@ -40,6 +64,9 @@
 	);
 	let answeredCount = $derived(activeItem ? activeItem.questions.filter(q => q.answered).length : 0);
 	let totalQuestions = $derived(activeItem ? activeItem.questions.length : 0);
+
+	// 안건 추가 가능 여부
+	let canAdd = $derived(canAddAgenda(isRecording, isPaused) && !!onAgendaCreate);
 
 	// Cleanup on destroy
 	onDestroy(() => {
@@ -90,6 +117,10 @@
 	function truncate(text: string, maxLen: number): string {
 		if (text.length <= maxLen) return text;
 		return text.slice(0, maxLen - 1) + '…';
+	}
+
+	function getPermissions(agenda: Agenda): AgendaPermissions {
+		return getAgendaPermissions(agenda, activeAgendaId, isRecording);
 	}
 
 	function handleQuestionToggle(question: AgendaQuestion) {
@@ -166,6 +197,94 @@
 	function toggleListCollapse() {
 		listCollapsed = !listCollapsed;
 	}
+
+	// 인라인 편집 함수들
+	function startEdit(agendaId: number, field: 'title' | 'description', currentValue: string, event: MouseEvent) {
+		event.stopPropagation();
+		editingAgendaId = agendaId;
+		editingField = field;
+		editValue = currentValue;
+		originalEditValue = currentValue;
+	}
+
+	async function handleSaveEdit() {
+		if (!onAgendaUpdate || !editingField || editingAgendaId === null) {
+			cancelEdit();
+			return;
+		}
+
+		const trimmedValue = editValue.trim();
+
+		// 빈 제목 불허
+		if (editingField === 'title' && trimmedValue === '') {
+			cancelEdit();
+			return;
+		}
+
+		// 변경 없으면 저장 안함
+		if (trimmedValue === originalEditValue) {
+			cancelEdit();
+			return;
+		}
+
+		const data = editingField === 'title'
+			? { title: trimmedValue }
+			: { description: trimmedValue };
+
+		const agendaId = editingAgendaId;
+		cancelEdit();
+
+		await onAgendaUpdate(agendaId, data);
+	}
+
+	function cancelEdit() {
+		editingAgendaId = null;
+		editingField = null;
+		editValue = '';
+		originalEditValue = '';
+	}
+
+	function handleEditKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' && !event.shiftKey) {
+			event.preventDefault();
+			handleSaveEdit();
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			cancelEdit();
+		}
+	}
+
+	// 안건 추가 함수들
+	async function handleAddAgenda() {
+		if (!onAgendaCreate || !newAgendaTitle.trim() || isAddingAgenda) return;
+
+		isAddingAgenda = true;
+		try {
+			await onAgendaCreate(newAgendaTitle.trim());
+			newAgendaTitle = '';
+			showAddForm = false;
+		} finally {
+			isAddingAgenda = false;
+		}
+	}
+
+	function handleAddKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			handleAddAgenda();
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			showAddForm = false;
+			newAgendaTitle = '';
+		}
+	}
+
+	// 안건 삭제
+	async function handleDelete(agendaId: number, event: MouseEvent) {
+		event.stopPropagation();
+		if (!onAgendaDelete) return;
+		await onAgendaDelete(agendaId);
+	}
 </script>
 
 <div class="w-full h-full bg-white flex flex-col overflow-hidden">
@@ -195,50 +314,116 @@
 			{#if !listCollapsed}
 				<div class="max-h-[220px] overflow-y-auto border-t border-gray-100">
 					{#each agendas as agenda, index (agenda.id)}
+						{@const perm = getPermissions(agenda)}
 						<!-- 대안건 -->
-						<button
-							type="button"
-							onclick={() => goToAgenda(index)}
-							class="w-full h-[48px] px-4 flex items-center gap-3 text-left transition-colors
+						<div
+							class="group w-full h-[48px] px-4 flex items-center gap-3 text-left transition-colors
 								{index === currentAgendaIndex && !activeChildId
 									? 'bg-blue-50 border-l-4 border-blue-600'
 									: index === currentAgendaIndex
 										? 'bg-blue-50/50 border-l-4 border-blue-300'
 										: 'hover:bg-gray-50 border-l-4 border-transparent'}"
 						>
-							<span class="w-5 text-center font-medium {getStatusColor(agenda, index)}">
+							<!-- 상태 아이콘 -->
+							<button
+								type="button"
+								onclick={() => goToAgenda(index)}
+								class="w-5 text-center font-medium {getStatusColor(agenda, index)}"
+							>
 								{getStatusIcon(agenda, index)}
-							</span>
-							<span class="flex-1 text-sm truncate {index === currentAgendaIndex && !activeChildId ? 'font-semibold text-blue-900' : 'text-gray-700'}">
-								{agenda.order_num}. {truncate(agenda.title, 16)}
-								{#if agenda.children && agenda.children.length > 0}
-									<span class="text-gray-400 text-xs">+{agenda.children.length}</span>
-								{/if}
-							</span>
-							<span class="text-xs text-gray-400 tabular-nums w-14 text-right">
+							</button>
+
+							<!-- 제목 영역 -->
+							{#if editingAgendaId === agenda.id && editingField === 'title'}
+								<!-- 편집 모드 -->
+								<input
+									type="text"
+									bind:value={editValue}
+									onblur={handleSaveEdit}
+									onkeydown={handleEditKeydown}
+									class="flex-1 px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+									autofocus
+								/>
+							{:else}
+								<!-- 표시 모드 -->
+								<button
+									type="button"
+									onclick={(e) => perm.canEditTitle && onAgendaUpdate ? startEdit(agenda.id, 'title', agenda.title, e) : goToAgenda(index)}
+									ondblclick={(e) => perm.canEditTitle && onAgendaUpdate && startEdit(agenda.id, 'title', agenda.title, e)}
+									class="flex-1 text-sm text-left truncate {index === currentAgendaIndex && !activeChildId ? 'font-semibold text-blue-900' : 'text-gray-700'}
+										{perm.canEditTitle && onAgendaUpdate ? 'hover:underline cursor-text' : 'cursor-pointer'}"
+								>
+									{agenda.order_num}. {truncate(agenda.title, 14)}
+									{#if agenda.children && agenda.children.length > 0}
+										<span class="text-gray-400 text-xs">+{agenda.children.length}</span>
+									{/if}
+								</button>
+							{/if}
+
+							<!-- 잠금 아이콘 (편집 불가 시) -->
+							{#if !perm.canEditTitle && onAgendaUpdate}
+								<span class="text-gray-400 flex-shrink-0" title={perm.reason}>
+									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+									</svg>
+								</span>
+							{/if}
+
+							<!-- 시간 표시 -->
+							<span class="text-xs text-gray-400 tabular-nums w-12 text-right flex-shrink-0">
 								{formatAgendaTime(agenda)}
 							</span>
-						</button>
+
+							<!-- 삭제 버튼 -->
+							{#if perm.canDelete && onAgendaDelete}
+								<button
+									type="button"
+									onclick={(e) => handleDelete(agenda.id, e)}
+									class="p-1 text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+									title="안건 삭제"
+								>
+									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+									</svg>
+								</button>
+							{/if}
+						</div>
 
 						<!-- 자식안건들 (현재 대안건이 선택된 경우에만 표시) -->
 						{#if index === currentAgendaIndex && agenda.children && agenda.children.length > 0}
 							{#each agenda.children as child, childIdx (child.id)}
-								<button
-									type="button"
-									onclick={() => goToChildAgenda(index, child.id)}
-									class="w-full h-[40px] pl-10 pr-4 flex items-center gap-2 text-left transition-colors
+								{@const childPerm = getPermissions(child)}
+								<div
+									class="group w-full h-[40px] pl-10 pr-4 flex items-center gap-2 text-left transition-colors
 										{isChildActive(child.id)
 											? 'bg-purple-50 border-l-4 border-purple-500'
 											: 'hover:bg-gray-50 border-l-4 border-transparent'}"
 								>
-									<span class="text-xs text-gray-400">{agenda.order_num}.{childIdx + 1}</span>
-									<span class="flex-1 text-sm truncate {isChildActive(child.id) ? 'font-medium text-purple-800' : 'text-gray-600'}">
+									<button
+										type="button"
+										onclick={() => goToChildAgenda(index, child.id)}
+										class="text-xs text-gray-400"
+									>
+										{agenda.order_num}.{childIdx + 1}
+									</button>
+									<button
+										type="button"
+										onclick={() => goToChildAgenda(index, child.id)}
+										class="flex-1 text-sm truncate {isChildActive(child.id) ? 'font-medium text-purple-800' : 'text-gray-600'}"
+									>
 										{truncate(child.title, 14)}
-									</span>
+									</button>
 									{#if child.time_segments?.length}
 										<span class="text-xs text-purple-400">●</span>
 									{/if}
-								</button>
+									{#if !childPerm.canEditTitle && onAgendaUpdate}
+										<span class="text-gray-400" title={childPerm.reason}>
+											<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+											</svg>
+										</span>
+									{/if}
+								</div>
 								<!-- 하하위 안건들 (3레벨) -->
 								{#if child.children && child.children.length > 0}
 									{#each child.children as grandchild, grandchildIdx (grandchild.id)}
@@ -263,6 +448,52 @@
 							{/each}
 						{/if}
 					{/each}
+
+					<!-- 안건 추가 UI -->
+					{#if canAdd}
+						{#if showAddForm}
+							<div class="p-3 border-t border-gray-100 bg-gray-50">
+								<input
+									type="text"
+									bind:value={newAgendaTitle}
+									onkeydown={handleAddKeydown}
+									placeholder="새 안건 제목..."
+									class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+									disabled={isAddingAgenda}
+									autofocus
+								/>
+								<div class="flex gap-2 mt-2">
+									<button
+										type="button"
+										onclick={handleAddAgenda}
+										disabled={!newAgendaTitle.trim() || isAddingAgenda}
+										class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										{isAddingAgenda ? '추가 중...' : '추가'}
+									</button>
+									<button
+										type="button"
+										onclick={() => { showAddForm = false; newAgendaTitle = ''; }}
+										disabled={isAddingAgenda}
+										class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+									>
+										취소
+									</button>
+								</div>
+							</div>
+						{:else}
+							<button
+								type="button"
+								onclick={() => showAddForm = true}
+								class="w-full p-3 text-sm text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2 border-t border-gray-100"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+								</svg>
+								안건 추가
+							</button>
+						{/if}
+					{/if}
 				</div>
 			{/if}
 		</div>

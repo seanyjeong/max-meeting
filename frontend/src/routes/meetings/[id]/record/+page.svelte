@@ -545,6 +545,102 @@
 			toast.error('회의 마무리에 실패했습니다.');
 		}
 	}
+
+	// ===== Agenda CRUD Handlers =====
+
+	/**
+	 * 새 안건 생성
+	 */
+	async function handleAgendaCreate(title: string, parentId?: number) {
+		if (!meeting) return;
+
+		try {
+			const response = await api.post<Agenda>(`/meetings/${meetingId}/agendas`, {
+				title,
+				parent_id: parentId ?? null,
+				order_num: meeting.agendas.length + 1
+			});
+
+			// 로컬 상태 업데이트
+			meeting = {
+				...meeting,
+				agendas: [...meeting.agendas, response]
+			};
+
+			toast.success('안건이 추가되었습니다');
+		} catch {
+			toast.error('안건 추가에 실패했습니다');
+		}
+	}
+
+	/**
+	 * 안건 수정 (낙관적 업데이트 + 롤백)
+	 */
+	async function handleAgendaUpdate(id: number, data: { title?: string; description?: string }) {
+		if (!meeting) return;
+
+		const oldAgenda = findAgendaById(id);
+		if (!oldAgenda) return;
+
+		// 원본 값 저장 (롤백용)
+		const originalTitle = oldAgenda.title;
+		const originalDescription = oldAgenda.description;
+
+		// 낙관적 업데이트
+		updateLocalAgenda(id, data);
+
+		try {
+			await api.patch(`/agendas/${id}`, data);
+		} catch {
+			// 롤백
+			updateLocalAgenda(id, {
+				title: originalTitle,
+				description: originalDescription
+			});
+			toast.error('수정에 실패했습니다');
+		}
+	}
+
+	/**
+	 * 안건 삭제
+	 */
+	async function handleAgendaDelete(id: number) {
+		if (!meeting) return;
+
+		const agenda = findAgendaById(id);
+		if (!agenda) return;
+
+		// 보호 로직: time_segments 있으면 삭제 금지
+		if (agenda.time_segments && agenda.time_segments.length > 0) {
+			toast.error('녹음된 구간이 있어 삭제할 수 없습니다');
+			return;
+		}
+
+		// activeAgendaId 체크
+		if (id === activeAgendaId) {
+			toast.error('현재 녹음 중인 안건은 삭제할 수 없습니다');
+			return;
+		}
+
+		try {
+			await api.delete(`/agendas/${id}`);
+
+			// 로컬 상태에서 제거
+			meeting = {
+				...meeting,
+				agendas: meeting.agendas.filter(a => a.id !== id)
+			};
+
+			// currentAgendaIndex 조정
+			if (currentAgendaIndex >= meeting.agendas.length) {
+				currentAgendaIndex = Math.max(0, meeting.agendas.length - 1);
+			}
+
+			toast.success('안건이 삭제되었습니다');
+		} catch {
+			toast.error('삭제에 실패했습니다');
+		}
+	}
 </script>
 
 <svelte:head>
@@ -630,10 +726,15 @@
 						notes={agendaNotes}
 						recordingTime={$recordingTime}
 						isRecording={$isRecording}
+						isPaused={$isPaused}
+						activeAgendaId={activeAgendaId}
 						onAgendaChange={handleAgendaChange}
 						onChildAgendaChange={handleChildAgendaChange}
 						onQuestionToggle={handleQuestionToggle}
 						onNoteChange={handleNoteChange}
+						onAgendaCreate={handleAgendaCreate}
+						onAgendaUpdate={handleAgendaUpdate}
+						onAgendaDelete={handleAgendaDelete}
 					/>
 				</div>
 			</div>

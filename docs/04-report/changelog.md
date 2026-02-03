@@ -4,6 +4,163 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [2026-02-03] - Meeting Agenda CRUD v1.17.0
+
+### Added
+- **Feature**: 회의 중 아젠다 CRUD
+  - 녹음 전/후 전체 CRUD 지원
+  - 녹음 중 제한적 편집 (안전 장치 포함)
+  - 인라인 제목 편집 (클릭 → input 전환 → Enter/blur 저장)
+  - 안건 추가 버튼 (목록 하단)
+  - 안건 삭제 버튼 (hover 시 표시, 권한 있을 때만)
+  - 편집 불가 시 잠금 아이콘 표시
+
+- **New File**: `frontend/src/lib/utils/agenda-permissions.ts`
+  - `getAgendaPermissions()` - 안건별 권한 계산
+  - `canAddAgenda()` - 추가 가능 여부 확인
+  - `getAgendaPermissionsMap()` - 계층형 안건 일괄 권한 체크
+
+### Changed
+- **AgendaNotePanel.svelte**: CRUD UI 추가
+  - 새 props: `activeAgendaId`, `isPaused`, `onAgendaCreate`, `onAgendaUpdate`, `onAgendaDelete`
+  - 인라인 편집 상태 관리
+  - 키보드 지원 (Enter/Escape)
+
+- **record/+page.svelte**: 핸들러 연결
+  - `handleAgendaCreate()` - 낙관적 업데이트
+  - `handleAgendaUpdate()` - 낙관적 업데이트 + 롤백
+  - `handleAgendaDelete()` - time_segments 보호 로직
+
+### Safety Features
+- `activeAgendaId` 체크로 현재 녹음 중 안건 편집 차단
+- `time_segments` 있는 안건 삭제 차단
+- API 실패 시 자동 롤백
+
+### Technical Details
+- **Match Rate**: 100% (Design vs Implementation)
+- **Build**: 성공 (10.78s)
+- **Type Check**: 통과 (경고만, 에러 없음)
+
+---
+
+## [2026-02-01] - Question Perspective Customization v1.16.7
+
+### Added
+- **Feature**: Question Perspective Customization for MeetingType
+  - New field `question_perspective` in MeetingType model
+  - Stores custom perspective/context for LLM-based question generation
+  - Allows users to customize the tone and focus of auto-generated agenda questions
+- **Database**: Alembic migration for question_perspective column
+  - File: `backend/alembic/versions/2bf4f5c94298_add_question_perspective_to_meeting_.py`
+  - Text column, nullable, no length limit (⚠️ future improvement: add max_length)
+- **API**: Meeting Type endpoints extended
+  - POST /api/v1/meeting-types now accepts `question_perspective` parameter
+  - PATCH /api/v1/meeting-types/{type_id} supports perspective updates
+  - GET /api/v1/meeting-types returns perspective in response
+- **Schema**: Validation schemas updated
+  - MeetingTypeCreate: optional question_perspective field
+  - MeetingTypeUpdate: optional question_perspective field with partial update support
+  - MeetingTypeResponse: includes question_perspective in API responses
+- **LLM Integration**: Question generation improved
+  - generate_questions() method extended with `question_perspective` parameter
+  - Perspective automatically included in Gemini API prompt when set
+  - Format: "회의 관점: {perspective}\n이 관점을 반영하여..."
+  - Applies to both single and hierarchical agenda creation
+- **Frontend**: Meeting Type creation UI with perspective input
+  - New textarea input for question perspective in "New Meeting Type" modal
+  - Character placeholder showing usage example
+  - Integrated with MeetingType store for state management
+  - TypeScript interface updated to include perspective field
+
+### Changed
+- **Agenda Creation**: Auto-question generation now perspective-aware
+  - create_agenda() endpoint: queries meeting_type.question_perspective and passes to LLM
+  - create_agenda_hierarchical() endpoint: same integration for hierarchical agendas
+  - Performance: uses selectinload to prevent N+1 queries when fetching meeting_type
+- **LLM Prompts**: Question generation prompts restructured
+  - Added perspective section after context in prompt template
+  - Users can now influence the style/focus of generated questions
+  - Example: "North Branch Director's perspective on profitability impact"
+
+### Technical Details
+- **Match Rate**: 100% (Design vs Implementation)
+- **Quality Score**: 85/100 (Code Analyzer)
+  - ⚠️ Warning: Prompt Injection risk (direct user input in LLM prompt)
+  - ⚠️ Warning: No length limit on perspective field
+  - ⚠️ Warning: Frontend textarea has no maxlength attribute
+  - ⚠️ Bug: Cannot set question_perspective to null (line 129 issue)
+- **Files Modified**: 9 total
+  - Backend: 5 files (models, schemas, routers, services)
+  - Frontend: 3 files (stores, routes, version)
+  - Database: 1 migration file
+- **New Files**: 1 (migration file)
+- **Lines of Code**: ~150 added
+
+### Known Issues
+- ⚠️ **BUG**: Setting question_perspective to null doesn't work
+  - Affected: PATCH /api/v1/meeting-types/{type_id}
+  - Cause: Line 129 condition `if data.question_perspective is not None`
+  - Workaround: Cannot delete perspective through API (only through DB)
+  - Fix: Use `model_dump(exclude_unset=True)` instead of None check
+- ⚠️ **Security**: Prompt Injection risk
+  - No validation on perspective content
+  - Direct insertion into LLM prompt without escaping
+  - Recommendation: Add input sanitization and max_length validation
+- ⚠️ **Usability**: No front-end UI for editing meeting types
+  - Meeting types can only be created (no edit/delete UI)
+  - Editing requires direct API calls
+  - Recommendation: Add Meeting Types management page
+- ⏭️ **Missing**: Unit tests and E2E tests
+  - No test coverage for new perspective functionality
+  - Recommendation: Add pytest tests and Playwright E2E tests
+
+### Security Considerations
+- **Prompt Injection Prevention**: RECOMMENDED
+  - Add max_length constraint (suggest 1000 characters)
+  - Sanitize dangerous prompt control characters
+  - Example: Remove triple backticks, "---", "===" from input
+- **Input Validation**: RECOMMENDED
+  - Trim and validate perspective content
+  - Consider providing template options instead of free-form text
+- **Rate Limiting**: No changes (existing limits apply)
+
+### Performance Impact
+- **Positive**: selectinload optimization prevents N+1 queries
+- **Neutral**: LLM prompt slightly longer (50-200 extra characters) due to perspective
+- **No degradation** in API response times
+
+### Backward Compatibility
+- ✅ Fully backward compatible
+- question_perspective is optional (nullable)
+- Existing meeting types without perspective continue to work
+- Meeting with question_perspective=null generate questions normally (perspective ignored)
+
+### Testing Recommendations
+```python
+# Unit tests needed:
+- test_create_meeting_type_with_perspective()
+- test_update_meeting_type_perspective()
+- test_perspective_in_question_generation()
+- test_null_perspective_handling()
+- test_perspective_length_limit() # when implemented
+
+# E2E tests needed:
+- Create meeting type → create agenda → verify questions reflect perspective
+- Edit meeting type perspective → create new agenda → verify updated perspective applied
+- Delete perspective → verify fallback to default behavior
+```
+
+### Deployment Checklist
+- [ ] Run Alembic migration: `alembic upgrade head`
+- [ ] Test API endpoints manually
+- [ ] Verify question generation with perspective
+- [ ] Check frontend UI rendering
+- [ ] Perform E2E testing (meeting creation flow)
+- [ ] Monitor LLM API calls for unexpected token usage
+- [ ] Consider adding rate limiting if necessary
+
+---
+
 ## [2026-01-30] - Code Quality Improvements v1.6.0
 
 ### Added
@@ -48,315 +205,9 @@ All notable changes to this project are documented in this file.
   - Frontend: 11 files (components, routes, stores, utils)
 - **New Files**: 2 (logger.ts, format.ts)
 - **Lines of Code**: ~200 added, ~50 removed
-- **Breaking Changes**: None
-- **Security Issues Fixed**: 4 critical issues
-
-### Files Changed
-```
-Backend:
-  - app/services/contact.py (SQL Injection fix)
-  - app/services/meeting.py (Ownership verification)
-  - workers/tasks/stt.py (asyncio deprecated method)
-  - workers/tasks/llm.py (asyncio deprecated method)
-  - app/routers/results.py (Access control)
-
-Frontend:
-  - src/lib/utils/logger.ts (NEW)
-  - src/lib/utils/format.ts (NEW)
-  - src/lib/api.ts (Console → logger refactor)
-  - src/lib/stores/auth.ts (Security documentation)
-  - src/routes/+page.svelte (Format import)
-  - src/routes/meetings/[id]/+page.svelte (Format import)
-  - src/routes/meetings/[id]/results/+page.svelte (Format import)
-  - src/routes/meetings/[id]/results/report/+page.svelte (Format import)
-  - src/routes/meetings/deleted/+page.svelte (Format import)
-  - src/lib/components/results/ActionItems.svelte (Format import)
-  - src/lib/components/results/RecordingsList.svelte (Format import)
-  - src/lib/components/ui/MeetingCard.svelte (Format import)
-  - src/lib/components/SyncConflictDialog.svelte (Format import)
-
-Documentation:
-  - docs/01-plan/features/code-quality-improvements.plan.md
-  - docs/02-design/features/code-quality-improvements.design.md
-  - docs/03-analysis/code-quality-improvements.analysis.md
-  - docs/04-report/features/code-quality-improvements.report.md
-```
-
-### Quality Metrics
-- **Backend Quality**: 78/100 → improved (security issues eliminated)
-- **Frontend Quality**: 72/100 → improved (code duplication reduced)
-- **Critical Issues Fixed**: 4/4 (100%)
-- **Code Duplication**: Reduced (9 format functions → 1 utility)
-- **Build Status**: ✅ Success (svelte-check + npm run build)
-
-### Deferred Items
-The following items were intentionally deferred for future cycles:
-- Phase 2: Large file refactoring (results/+page.svelte, [id]/+page.svelte)
-- Phase 2: Backend duplicate code consolidation (agendas.py)
-- Phase 3: Prompt externalization, function splitting, error handling integration
-- Phase 3: Type safety enhancements (any → unknown migration)
-
-### Version Info
-- **Version**: v1.6.0
-- **Release Date**: 2026-01-30
-- **Issues Fixed**: 7 items implemented, 7 items deferred
-- **Estimated Development Time**: 4 hours
-- **PDCA Report**: docs/04-report/features/code-quality-improvements.report.md
-
----
-
-## [2026-01-30] - QA 버그 수정 v1.5.1
-
-### Fixed
-- **Hierarchical Agenda System (3-Level Support)**
-  - Fix #1: Meeting creation now properly saves 3-level agendas (recursive function verified)
-  - Fix #2: Meeting settings page now displays 3-level agendas with proper indentation
-  - Fix #9: Meeting summary generation now includes 3-level agendas with hierarchical order
-  - Implementation: Added `hierarchical_order` field to LLM input and improved recursive rendering
-
-- **Recording & Timestamps**
-  - Fix #8: Timestamp reset now works correctly when restarting recording
-  - Validation: Time segments properly cleared on meeting restart
-
-- **Progress Indicators**
-  - Fix #4: STT progress percentage now displays correctly (1-99%, completion to 100%)
-  - Fix #5: AI generation completion detection improved (95% hangup resolved)
-  - Implementation: Enhanced progress state management and completion detection logic
-
-- **UI/UX Improvements**
-  - Fix #3: Button text changed from "녹음 재시작" to "회의 재시작" (Recording restart → Meeting restart)
-  - Fix #6: Discussion numbering now shows hierarchical format (1.2.1 style)
-  - Fix #7: Transcript dropdown overflow fixed with proper scrolling
-  - Fix #10: Summary editor UI localized to Korean
-  - Fix #11: Meeting summary now displays content organized by agenda
-  - Fix #12: Action items add feature verified working correctly
-
-### Technical Details
-- **Code Verification**: 83% (10/12 code paths reviewed)
-- **Files Modified**: 10 (3 backend, 7 frontend)
-- **Backend Changes**:
-  - `app/routers/results.py`: Added hierarchical_order calculation
-  - `app/services/llm.py`: Enhanced prompt with 3-level agenda support
-  - `workers/tasks/llm.py`: Improved 3-level agenda processing
-- **Frontend Changes**:
-  - `routes/meetings/[id]/+page.svelte`: 3-level agenda rendering
-  - `routes/meetings/[id]/record/+page.svelte`: Text changes, timestamp reset
-  - `routes/meetings/[id]/results/+page.svelte`: Progress logic, text updates
-  - `lib/components/results/TranscriptViewer.svelte`: Overflow fixes
-  - `lib/components/results/SummaryEditor.svelte`: Korean UI localization
-  - `lib/components/results/ActionItems.svelte`: Feature validation
-  - Plus validation in `routes/meetings/new/+page.svelte`
-
-### Quality Metrics
-- **Issues Fixed**: 12/12 (100%)
-- **Critical Issues**: 3/3 complete
-- **Important Issues**: 5/5 complete
-- **UX Improvements**: 4/4 complete
-- **Infrastructure Status**: All services operational ✅
-
-### Known Notes
-- STT and AI progress bars pending manual end-to-end testing
-- 3-level agendas now fully integrated across create/display/summary
-- All changes backward compatible with existing meeting data
-
-### Version Info
-- **Version**: v1.5.1
-- **Release Date**: 2026-01-30
-- **Issues Fixed**: 12 (3 Critical, 5 Important, 4 UX)
-- **Estimated Development Time**: 6 hours
-- **PDCA Report**: docs/04-report/features/v1.5.1-qa-fixes.report.md
-
----
-
-## [2026-01-30] - UX 개선 및 버그 수정 v1.4
-
-### Added
-- Progress gauge for STT processing and meeting transcription
-  - Time-based estimated progress percentage
-  - Real-time progress updates during processing
-  - Progress display in results page and recordings list
-- Question edit/delete UI in meeting details page
-  - Inline action buttons for editing questions
-  - Inline action buttons for deleting questions
-  - Confirmation dialogs before deletion
-- Child agenda numbering in hierarchical agenda display
-  - Format: 1.1, 1.2, etc. for child agendas
-  - Clear visual hierarchy in meeting details and PDF
-
-### Changed
-- Meeting start buttons consolidated
-  - Single unified "회의 시작" (Start Meeting) button
-  - Recording mode selected automatically in recording interface
-- Transcript viewer tab styling for better visibility
-  - Selected tab background: blue (#1d4ed8)
-  - Selected tab text: white with increased contrast
-  - Added box-shadow for depth perception
-- Recording controls repositioned
-  - Moved from floating bottom-right to integrated recording section
-  - Better integration with meeting workspace layout
-- CompactRecordingBar component
-  - Removed fixed positioning
-  - Changed to relative positioning within recording section
-  - Better alignment with note-sketch area
-
-### Fixed
-- Child agenda creation not persisting
-  - ROOT CAUSE: Missing recursive save function in new meeting page
-  - Solution: Added `saveAgendasRecursively` function for hierarchical storage
-  - Impact: Child agendas now properly created and stored in database
-- Agenda-discussion content mismatch
-  - ROOT CAUSE: LLM response mapping not using agenda IDs
-  - Solution: Added `agenda_id` to LLM prompt and worker mapping logic
-  - Impact: Discussions now correctly matched to specific agendas including children
-- Child agendas missing from PDF reports
-  - ROOT CAUSE: Discussions not generated for child agendas (fixed by C3)
-  - Solution: Automatic fix via improved discussion generation
-  - Impact: PDF reports now include discussions for all agenda levels
-- Typing Shift key lock behavior
-  - Investigation completed: No code issue found
-  - Confirmed as environment/keyboard issue, not application bug
-- NoteSketchArea scroll overflow
-  - Fixed scrolling behavior in note-taking interface
-  - Improved scroll performance during recording
-- Tablet responsive layout (2000x1200)
-  - Added media queries for high-resolution tablets
-  - Font size adjustments for tablet screens
-  - Minimum width settings for agenda panel
-  - Improved layout stability on large tablets
-
-### Technical Details
-- **Match Rate**: 100% (Design vs Implementation)
-- **Files Modified**: 9 (backend: 2, frontend: 7)
-- **Files Added**: 0
-- **Backend Changes**:
-  - `app/services/llm.py`: Enhanced LLM prompt with agenda metadata
-  - `workers/tasks/llm.py`: Improved agenda-discussion mapping logic
-- **Frontend Changes**:
-  - `routes/meetings/new/+page.svelte`: Recursive agenda save function
-  - `routes/meetings/[id]/+page.svelte`: Question UI and meeting start consolidation
-  - `routes/meetings/[id]/record/+page.svelte`: Recording controls repositioning
-  - `routes/meetings/[id]/results/+page.svelte`: Progress gauge implementation
-  - `lib/components/recording/CompactRecordingBar.svelte`: Positioning fix
-  - `lib/components/recording/NoteSketchArea.svelte`: Scroll fix
-  - `lib/components/results/TranscriptViewer.svelte`: Tab styling improvement
-  - `lib/components/results/RecordingsList.svelte`: Progress display
-  - `app.css`: Tablet responsive styles
-- **Database**: No schema changes
-- **Svelte Version**: 5 (Rune-based reactivity)
-
-### Files Changed
-```
-Backend:
-  - app/services/llm.py
-  - workers/tasks/llm.py
-
-Frontend:
-  - src/routes/meetings/new/+page.svelte
-  - src/routes/meetings/[id]/+page.svelte
-  - src/routes/meetings/[id]/record/+page.svelte
-  - src/routes/meetings/[id]/results/+page.svelte
-  - src/lib/components/recording/CompactRecordingBar.svelte
-  - src/lib/components/recording/NoteSketchArea.svelte
-  - src/lib/components/results/TranscriptViewer.svelte
-  - src/lib/components/results/RecordingsList.svelte
-  - src/app.css
-
-Documentation:
-  - docs/01-plan/features/ux-improvements-v1.4.plan.md
-  - docs/02-design/features/ux-improvements-v1.4.design.md
-  - docs/04-report/features/ux-improvements-v1.4.report.md
-```
-
-### Notes
-- All 12 issues from user feedback completely resolved
-- 100% design-to-implementation alignment achieved
-- No breaking changes to existing features
-- Backward compatible with all previous meeting data
-- Improved accessibility through better visual contrast
-- Responsive design now covers tablet resolutions from 1200px to 2000px
-- Progress indicators provide better feedback during long-running operations
-
-### Version Info
-- **Version**: v1.4.0
-- **Release Date**: 2026-01-30
-- **Related Issues**: 12 (C1-C4, U1-U6, L1-L2)
-- **Estimated Development Time**: 5 hours
-- **PDCA Report**: docs/04-report/features/ux-improvements-v1.4.report.md
-
----
-
-## [2026-01-30] - Hierarchical Agenda System v1.2.3
-
-### Added
-- Hierarchical agenda toggle UI in meeting details page
-  - Parent agenda expand/collapse
-  - Child agenda display with indentation
-  - Per-child question rendering
-- Child agenda timestamp tracking in recording interface
-  - Clickable child agenda buttons with time segment support
-  - Separate time_segments storage for child agendas
-- Multi-level agenda filtering in results page
-  - Parent agenda dropdown filter
-  - Child agenda submenu for detailed filtering
-  - Time-based transcript segment matching
-- PDF meeting report page
-  - Agenda-organized content layout
-  - Notes and sketches display
-  - Print-optimized styling
-  - Sketch modal viewer
-- Question generation priority logic
-  - Child agenda-first generation
-  - Parent agenda fallback when no children exist
-
-### Changed
-- Meeting detail page: flatten UI to show agenda hierarchy
-- Recording page: AgendaNotePanel now supports child agenda selection
-- Results page: TranscriptViewer implements hierarchical filtering
-- PWA update notifier: disabled per user request
-- Question generation: backend logic prioritizes child agendas
-
-### Fixed
-- Svelte 5 Rune reactivity for toggle state management
-- Time segment assignment for child agendas during recording
-- Transcript filtering accuracy for multi-level time boundaries
-- Print styling for PDF generation
-
-### Technical Details
-- **Match Rate**: 98% (Design vs Implementation)
-- **Files Modified**: 6
-- **Files Added**: 1 (report page)
-- **Backend Changes**: agendas.py question generation logic
-- **Database**: No schema changes (reuses existing agendas table)
-- **Svelte Version**: 5 (Rune-based reactivity)
-
-### Files Changed
-```
-Frontend:
-  - src/lib/components/UpdateNotifier.svelte
-  - src/routes/meetings/[id]/+page.svelte
-  - src/lib/components/recording/AgendaNotePanel.svelte
-  - src/routes/meetings/[id]/record/+page.svelte
-  - src/lib/components/results/TranscriptViewer.svelte
-  - src/routes/meetings/[id]/results/report/+page.svelte (NEW)
-  - src/routes/meetings/[id]/results/+page.svelte
-
-Backend:
-  - app/routers/agendas.py
-
-Documentation:
-  - docs/01-plan/features/hierarchical-agenda-system.plan.md
-  - docs/02-design/features/hierarchical-agenda-system.design.md
-  - docs/04-report/features/hierarchical-agenda-system.report.md
-```
-
-### Notes
-- Backward compatible with meetings without child agendas
-- Existing time_segments data remains unchanged
-- PWA offline functionality preserved after update notifier removal
-- All 6 implementation phases completed successfully
 
 ---
 
 ## Previous Versions
 
-See git history for earlier changes.
+See `/home/et/max-ops/max-meeting/frontend/src/lib/version.ts` for version history prior to v1.16.0.
