@@ -270,6 +270,21 @@
 							<div class="agenda-content-grid" class:single-column={!agendaTreeHasNotes(agenda)}>
 								<!-- Left Column: Discussion -->
 								<div class="content-left">
+									<!-- 대안건 토론 내용 (항상 표시) -->
+									{#if getDiscussion(agenda.id)}
+										<div class="discussion-block parent-discussion">
+											<h5 class="block-label">토론 내용</h5>
+											<p>{getDiscussion(agenda.id)}</p>
+											{#if getKeyPoints(agenda.id).length > 0}
+												<ul class="key-points">
+													{#each getKeyPoints(agenda.id) as point}
+														<li>{point}</li>
+													{/each}
+												</ul>
+											{/if}
+										</div>
+									{/if}
+
 									{#if agenda.children && agenda.children.length > 0}
 										<!-- Child Agendas -->
 										{#each agenda.children as child, childIdx}
@@ -352,21 +367,7 @@
 											</div>
 										{/each}
 									{:else}
-										<!-- No children - show parent agenda content -->
-										{#if getDiscussion(agenda.id)}
-											<div class="discussion-block">
-												<h5 class="block-label">토론 내용</h5>
-												<p>{getDiscussion(agenda.id)}</p>
-												{#if getKeyPoints(agenda.id).length > 0}
-													<ul class="key-points">
-														{#each getKeyPoints(agenda.id) as point}
-															<li>{point}</li>
-														{/each}
-													</ul>
-												{/if}
-											</div>
-										{/if}
-
+										<!-- No children - action items only (discussion shown above) -->
 										<!-- Action items for parent -->
 										{#if getActionItemsForAgenda(agenda.id).length > 0}
 											<div class="action-items-inline">
