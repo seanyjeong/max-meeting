@@ -467,6 +467,50 @@ function createResultsStore() {
 		}));
 	}
 
+	// Agenda Discussions CRUD
+	async function updateDiscussion(
+		discussionId: number,
+		updates: { summary?: string; key_points?: string[] }
+	): Promise<boolean> {
+		try {
+			await api.patch(`/discussions/${discussionId}`, updates);
+
+			update((state) => ({
+				...state,
+				agendaDiscussions: state.agendaDiscussions.map((d) =>
+					d.id === discussionId
+						? { ...d, ...updates }
+						: d
+				)
+			}));
+			return true;
+		} catch (error) {
+			update((state) => ({
+				...state,
+				error: '토론 내용 수정에 실패했습니다.'
+			}));
+			return false;
+		}
+	}
+
+	async function deleteDiscussion(discussionId: number): Promise<boolean> {
+		try {
+			await api.delete(`/discussions/${discussionId}`);
+
+			update((state) => ({
+				...state,
+				agendaDiscussions: state.agendaDiscussions.filter((d) => d.id !== discussionId)
+			}));
+			return true;
+		} catch (error) {
+			update((state) => ({
+				...state,
+				error: '토론 내용 삭제에 실패했습니다.'
+			}));
+			return false;
+		}
+	}
+
 	return {
 		subscribe,
 
@@ -482,6 +526,9 @@ function createResultsStore() {
 		updateActionItem,
 		deleteActionItem,
 		reorderActionItems,
+
+		updateDiscussion,
+		deleteDiscussion,
 
 		setEditMode: (enabled: boolean) =>
 			update((state) => ({

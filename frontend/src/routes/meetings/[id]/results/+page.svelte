@@ -17,7 +17,7 @@
 	import { api } from '$lib/api';
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { exportToPdf, copyToClipboard } from '$lib/utils/exportPdf';
-	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio, Mic, Loader2, Printer } from 'lucide-svelte';
+	import { FileText, ClipboardCopy, Download, RefreshCw, Pencil, Check, ListTodo, FileAudio, Mic, Loader2, Printer, Trash2, X, Save } from 'lucide-svelte';
 	import type { MeetingDetail } from '$lib/stores/meeting';
 	import { formatDateTime } from '$lib/utils/format';
 	import { logger } from '$lib/utils/logger';
@@ -73,6 +73,11 @@
 
 	// Meeting sketches state
 	let meetingSketches = $state<MeetingSketch[]>([]);
+
+	// Discussion edit state
+	let editingDiscussionId = $state<number | null>(null);
+	let editedDiscussionSummary = $state('');
+	let editedDiscussionKeyPoints = $state<string[]>([]);
 
 	// Progress tracking for U1
 	let sttStartTime = $state<number | null>(null);
@@ -469,6 +474,54 @@
 	function handleEdit() {
 		goto(`/meetings/${meetingId}/results/edit`);
 	}
+
+	// Discussion CRUD handlers
+	function startEditDiscussion(discussion: { id: number; summary: string; key_points: string[] | null }) {
+		editingDiscussionId = discussion.id;
+		editedDiscussionSummary = discussion.summary || '';
+		editedDiscussionKeyPoints = discussion.key_points ? [...discussion.key_points] : [];
+	}
+
+	function cancelEditDiscussion() {
+		editingDiscussionId = null;
+		editedDiscussionSummary = '';
+		editedDiscussionKeyPoints = [];
+	}
+
+	async function saveDiscussion() {
+		if (!editingDiscussionId) return;
+
+		const success = await resultsStore.updateDiscussion(editingDiscussionId, {
+			summary: editedDiscussionSummary,
+			key_points: editedDiscussionKeyPoints.filter(p => p.trim())
+		});
+
+		if (success) {
+			toast.success('토론 내용이 수정되었습니다.');
+			cancelEditDiscussion();
+		}
+	}
+
+	async function deleteDiscussion(discussionId: number) {
+		if (!confirm('이 토론 내용을 삭제하시겠습니까?')) return;
+
+		const success = await resultsStore.deleteDiscussion(discussionId);
+		if (success) {
+			toast.success('토론 내용이 삭제되었습니다.');
+		}
+	}
+
+	function addKeyPoint() {
+		editedDiscussionKeyPoints = [...editedDiscussionKeyPoints, ''];
+	}
+
+	function removeKeyPoint(index: number) {
+		editedDiscussionKeyPoints = editedDiscussionKeyPoints.filter((_, i) => i !== index);
+	}
+
+	function updateKeyPoint(index: number, value: string) {
+		editedDiscussionKeyPoints = editedDiscussionKeyPoints.map((p, i) => i === index ? value : p);
+	}
 </script>
 
 <svelte:head>
@@ -730,25 +783,86 @@
 							{:else}
 								{#each $resultsStore.agendaDiscussions as discussion}
 									{@const agendaNotes = getNotesForAgenda(discussion.agenda_id)}
+									{@const isEditing = editingDiscussionId === discussion.id}
 									<Card>
 										{#snippet children()}
 											<div class="discussion-item">
 												<div class="discussion-header">
 													<span class="discussion-order">{discussion.agenda_order}</span>
 													<h3 class="discussion-title">{discussion.agenda_title}</h3>
+													<div class="discussion-actions">
+														{#if isEditing}
+															<Button variant="primary" size="sm" onclick={saveDiscussion}>
+																{#snippet children()}
+																	<Save class="w-4 h-4" />
+																{/snippet}
+															</Button>
+															<Button variant="ghost" size="sm" onclick={cancelEditDiscussion}>
+																{#snippet children()}
+																	<X class="w-4 h-4" />
+																{/snippet}
+															</Button>
+														{:else}
+															<Button variant="ghost" size="sm" onclick={() => startEditDiscussion(discussion)}>
+																{#snippet children()}
+																	<Pencil class="w-4 h-4" />
+																{/snippet}
+															</Button>
+															<Button variant="ghost" size="sm" onclick={() => deleteDiscussion(discussion.id)}>
+																{#snippet children()}
+																	<Trash2 class="w-4 h-4 text-red-500" />
+																{/snippet}
+															</Button>
+														{/if}
+													</div>
 												</div>
 												<div class="discussion-body">
 													<div class="discussion-content">
-														<p>{discussion.summary}</p>
-														{#if discussion.key_points && discussion.key_points.length > 0}
-															<ul class="key-points">
-																{#each discussion.key_points as point}
-																	<li>{point}</li>
-																{/each}
-															</ul>
+														{#if isEditing}
+															<!-- 편집 모드 -->
+															<div class="edit-form">
+																<label class="edit-label">요약</label>
+																<textarea
+																	class="edit-textarea"
+																	bind:value={editedDiscussionSummary}
+																	rows="4"
+																	placeholder="토론 요약 내용..."
+																></textarea>
+
+																<label class="edit-label mt-4">핵심 포인트</label>
+																<div class="key-points-edit">
+																	{#each editedDiscussionKeyPoints as point, i}
+																		<div class="key-point-row">
+																			<input
+																				type="text"
+																				class="key-point-input"
+																				value={point}
+																				oninput={(e) => updateKeyPoint(i, e.currentTarget.value)}
+																				placeholder="핵심 포인트..."
+																			/>
+																			<button type="button" class="remove-btn" onclick={() => removeKeyPoint(i)}>
+																				<X class="w-4 h-4" />
+																			</button>
+																		</div>
+																	{/each}
+																	<button type="button" class="add-point-btn" onclick={addKeyPoint}>
+																		+ 핵심 포인트 추가
+																	</button>
+																</div>
+															</div>
+														{:else}
+															<!-- 보기 모드 -->
+															<p>{discussion.summary}</p>
+															{#if discussion.key_points && discussion.key_points.length > 0}
+																<ul class="key-points">
+																	{#each discussion.key_points as point}
+																		<li>{point}</li>
+																	{/each}
+																</ul>
+															{/if}
 														{/if}
 													</div>
-													{#if agendaNotes.length > 0}
+													{#if agendaNotes.length > 0 && !isEditing}
 														<div class="discussion-notes">
 															{#each agendaNotes as note}
 																<PostItNote
@@ -1277,6 +1391,12 @@
 		margin-bottom: 0.75rem;
 	}
 
+	.discussion-actions {
+		display: flex;
+		gap: 0.25rem;
+		margin-left: auto;
+	}
+
 	.discussion-order {
 		display: flex;
 		align-items: center;
@@ -1332,6 +1452,95 @@
 	.key-points li {
 		color: #4b5563;
 		margin-bottom: 0.25rem;
+	}
+
+	/* Discussion edit form styles */
+	.edit-form {
+		width: 100%;
+	}
+
+	.edit-label {
+		display: block;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #374151;
+		margin-bottom: 0.5rem;
+	}
+
+	.edit-textarea {
+		width: 100%;
+		padding: 0.75rem;
+		border: 1px solid #d1d5db;
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		line-height: 1.5;
+		resize: vertical;
+	}
+
+	.edit-textarea:focus {
+		outline: none;
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+	}
+
+	.key-points-edit {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.key-point-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.key-point-input {
+		flex: 1;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #d1d5db;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+	}
+
+	.key-point-input:focus {
+		outline: none;
+		border-color: #3b82f6;
+	}
+
+	.remove-btn {
+		padding: 0.375rem;
+		background: transparent;
+		border: none;
+		color: #9ca3af;
+		cursor: pointer;
+		border-radius: 0.25rem;
+	}
+
+	.remove-btn:hover {
+		color: #ef4444;
+		background: #fef2f2;
+	}
+
+	.add-point-btn {
+		padding: 0.5rem;
+		background: transparent;
+		border: 1px dashed #d1d5db;
+		border-radius: 0.375rem;
+		color: #6b7280;
+		font-size: 0.875rem;
+		cursor: pointer;
+		text-align: center;
+	}
+
+	.add-point-btn:hover {
+		border-color: #3b82f6;
+		color: #3b82f6;
+		background: #eff6ff;
+	}
+
+	.mt-4 {
+		margin-top: 1rem;
 	}
 
 	/* Responsive: stack notes below content on small screens */

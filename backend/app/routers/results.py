@@ -11,6 +11,8 @@ from app.schemas.result import (
     ActionItemCreate,
     ActionItemResponse,
     ActionItemUpdate,
+    AgendaDiscussionResponse,
+    AgendaDiscussionUpdate,
     RegenerateRequest,
     RegenerateResponse,
     ResultCreate,
@@ -306,3 +308,85 @@ async def get_meeting_discussions(
     discussions.sort(key=lambda d: [int(x) for x in d["agenda_order"].split(".")])
 
     return {"data": discussions}
+
+
+@router.patch("/discussions/{discussion_id}", response_model=AgendaDiscussionResponse)
+async def update_discussion(
+    discussion_id: int,
+    data: AgendaDiscussionUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Update an agenda discussion."""
+    from sqlalchemy import select
+    from app.models import AgendaDiscussion, MeetingResult
+    from app.services.meeting import MeetingService
+
+    # Get the discussion
+    result = await db.execute(
+        select(AgendaDiscussion).where(AgendaDiscussion.id == discussion_id)
+    )
+    discussion = result.scalar_one_or_none()
+
+    if not discussion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Discussion not found"
+        )
+
+    # Verify access via result -> meeting
+    result_obj = await db.execute(
+        select(MeetingResult).where(MeetingResult.id == discussion.result_id)
+    )
+    meeting_result = result_obj.scalar_one_or_none()
+    if meeting_result:
+        meeting_service = MeetingService(db)
+        await meeting_service.verify_meeting_access(meeting_result.meeting_id)
+
+    # Update fields
+    if data.summary is not None:
+        discussion.summary = data.summary
+    if data.key_points is not None:
+        discussion.key_points = data.key_points
+
+    await db.commit()
+    await db.refresh(discussion)
+
+    return AgendaDiscussionResponse.model_validate(discussion)
+
+
+@router.delete("/discussions/{discussion_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_discussion(
+    discussion_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+):
+    """Delete an agenda discussion."""
+    from sqlalchemy import select
+    from app.models import AgendaDiscussion, MeetingResult
+    from app.services.meeting import MeetingService
+
+    # Get the discussion
+    result = await db.execute(
+        select(AgendaDiscussion).where(AgendaDiscussion.id == discussion_id)
+    )
+    discussion = result.scalar_one_or_none()
+
+    if not discussion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Discussion not found"
+        )
+
+    # Verify access via result -> meeting
+    result_obj = await db.execute(
+        select(MeetingResult).where(MeetingResult.id == discussion.result_id)
+    )
+    meeting_result = result_obj.scalar_one_or_none()
+    if meeting_result:
+        meeting_service = MeetingService(db)
+        await meeting_service.verify_meeting_access(meeting_result.meeting_id)
+
+    # Delete
+    await db.delete(discussion)
+    await db.commit()

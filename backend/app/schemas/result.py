@@ -184,3 +184,28 @@ class RegenerateResponse(BaseModel):
 
     task_id: str
     message: str = "Regeneration task started"
+
+
+# ============================================
+# Agenda Discussion Schemas
+# ============================================
+
+
+class AgendaDiscussionUpdate(BaseModel):
+    """Schema for updating an agenda discussion."""
+
+    summary: str | None = Field(default=None, max_length=10000)
+    key_points: list[str] | None = None
+
+
+class AgendaDiscussionResponse(BaseModel):
+    """Schema for agenda discussion response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    result_id: int
+    agenda_id: int
+    summary: str | None
+    key_points: list[str] | None
+    created_at: datetime
