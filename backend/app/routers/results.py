@@ -272,17 +272,25 @@ async def get_meeting_discussions(
     # Create a map of agenda_id to its data
     agenda_map = {a.id: a for a in all_agendas}
 
+    # Build hierarchical orders (1-based)
+    hierarchical_orders: dict[int, str] = {}
+    parent_agendas = [a for a in all_agendas if a.parent_id is None]
+    parent_agendas.sort(key=lambda a: a.order_num)
+
+    for idx, parent in enumerate(parent_agendas, 1):
+        hierarchical_orders[parent.id] = str(idx)
+        children = [a for a in all_agendas if a.parent_id == parent.id]
+        children.sort(key=lambda a: a.order_num)
+        for i, child in enumerate(children, 1):
+            hierarchical_orders[child.id] = f"{idx}.{i}"
+            grandchildren = [a for a in all_agendas if a.parent_id == child.id]
+            grandchildren.sort(key=lambda a: a.order_num)
+            for j, grandchild in enumerate(grandchildren, 1):
+                hierarchical_orders[grandchild.id] = f"{idx}.{i}.{j}"
+
     def get_hierarchical_order(agenda_id: int) -> str:
-        """Build hierarchical order string like '1.2.1'"""
-        path = []
-        current = agenda_map.get(agenda_id)
-        while current:
-            path.append(str(current.order_num))
-            if current.parent_id:
-                current = agenda_map.get(current.parent_id)
-            else:
-                break
-        return ".".join(reversed(path))
+        """Get hierarchical order string like '1.2.1' (1-based)"""
+        return hierarchical_orders.get(agenda_id, "0")
 
     # Get discussions with agenda info
     discussions_result = await db.execute(

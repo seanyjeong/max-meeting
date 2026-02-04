@@ -251,19 +251,19 @@ def generate_meeting_result(
             child_orders: dict[int, int] = {}  # agenda_id -> child_order (1-based)
             hierarchical_orders: dict[int, str] = {}  # agenda_id -> hierarchical order string (e.g., "1.2.1")
 
-            for parent in parent_agendas:
-                hierarchical_orders[parent.id] = str(parent.order_num)
+            for idx, parent in enumerate(parent_agendas, 1):
+                hierarchical_orders[parent.id] = str(idx)  # 1-based
                 children = [a for a in meeting.agendas if a.parent_id == parent.id]
                 children.sort(key=lambda a: a.order_num)
                 for i, child in enumerate(children, 1):
                     child_orders[child.id] = i
-                    hierarchical_orders[child.id] = f"{parent.order_num}.{i}"
+                    hierarchical_orders[child.id] = f"{idx}.{i}"
                     # 3레벨 손자안건 처리
                     grandchildren = [a for a in meeting.agendas if a.parent_id == child.id]
                     grandchildren.sort(key=lambda a: a.order_num)
                     for j, grandchild in enumerate(grandchildren, 1):
                         child_orders[grandchild.id] = j
-                        hierarchical_orders[grandchild.id] = f"{parent.order_num}.{i}.{j}"
+                        hierarchical_orders[grandchild.id] = f"{idx}.{i}.{j}"
 
             agenda_info = [
                 {
