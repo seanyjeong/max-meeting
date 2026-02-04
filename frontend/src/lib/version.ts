@@ -2,10 +2,11 @@
  * App version configuration
  * Update this when deploying new versions
  */
-export const APP_VERSION = '1.17.0';
-export const BUILD_DATE = '2026-02-01';
+export const APP_VERSION = '1.18.0';
+export const BUILD_DATE = '2026-02-04';
 
 // Version history (for reference)
+// 1.18.0 - 안건별 토론 CRUD, 안건 번호 1-based 수정 (0번 누락 해결)
 // 1.17.0 - 직접 참석자 입력 (연락처 없이 이름만으로 추가 가능)
 // 1.16.9 - 질문 재생성 버튼, 질문 개수 1~4개 랜덤
 // 1.16.8 - 회의 유형 편집 UI 추가 (question_perspective 수정 가능)
